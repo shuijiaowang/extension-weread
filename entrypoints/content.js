@@ -270,6 +270,218 @@ export default defineContentScript({
             return lines.join('\n');
         }
 
+        function isVisibleElement(element) {
+            if (!element) return false;
+
+            const style = window.getComputedStyle(element);
+            if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') return false;
+
+            const rect = element.getBoundingClientRect();
+            return rect.width > 0 && rect.height > 0;
+        }
+
+        function isInteractableElement(element) {
+            if (!element?.isConnected) return false;
+
+            const style = window.getComputedStyle(element);
+            return style.display !== 'none' && style.visibility !== 'hidden';
+        }
+
+        function getActiveReviewPanel() {
+            const panels = Array.from(document.querySelectorAll('.float_panel_position_wrapper'))
+                .filter((panel) => (
+                    isVisibleElement(panel)
+                    && panel.querySelector('.review_section_toolbar_item_copy')
+                    && panel.querySelector('.reader_floatReviewsPanel_list_wrapper')
+                ));
+
+            return panels.at(-1) || null;
+        }
+
+        async function waitForReviewPanel(timeoutMs = 1200) {
+            const start = Date.now();
+
+            while (Date.now() - start < timeoutMs) {
+                const panel = getActiveReviewPanel();
+                if (panel) return panel;
+                await sleep(80);
+            }
+
+            return null;
+        }
+
+        async function waitForReviewPanelClosed(timeoutMs = 1200) {
+            const start = Date.now();
+
+            while (Date.now() - start < timeoutMs) {
+                if (!getActiveReviewPanel()) return true;
+                await sleep(80);
+            }
+
+            return false;
+        }
+
+        async function closeReviewPanel(panel) {
+            const closeBtn = panel?.querySelector('.reader_float_panel_header_closeBtn');
+            if (!closeBtn) {
+                console.warn('[weread] 未找到评论弹窗关闭按钮');
+                return false;
+            }
+
+            closeBtn.click();
+            return waitForReviewPanelClosed();
+        }
+
+        function getReviewTriggerRow(wrapper) {
+            return wrapper?.parentElement?.parentElement?.parentElement || null;
+        }
+
+        function clickReviewTrigger(element) {
+            if (!element) return;
+            element.click();
+        }
+
+        function getCurrentPageReviewContainers() {
+            const wrapper = document.querySelector('.wr_underline_wrapper');
+            if (!wrapper) return [];
+
+            const row = getReviewTriggerRow(wrapper);
+            if (!row) return [];
+
+            return Array.from(row.querySelectorAll(':scope > div'));
+        }
+
+        function getCurrentPageReviewTriggers() {
+            return getCurrentPageReviewContainers()
+                .map((container) => container.querySelector('.wr_underline_wrapper'))
+                .filter(Boolean);
+        }
+
+        function normalizeFullCaptureMatchText(text) {
+            return String(text ?? '').replace(/[\s\u200b-\u200d\ufeff]/g, '');
+        }
+
+        function buildNormalizedIndex(text) {
+            let normalized = '';
+            const sourceIndexes = [];
+
+            for (let index = 0; index < text.length; index += 1) {
+                const char = text[index];
+                if (/[\s\u200b-\u200d\ufeff]/.test(char)) continue;
+
+                normalized += char;
+                sourceIndexes.push(index);
+            }
+
+            return { normalized, sourceIndexes };
+        }
+
+        function findReviewInsertIndex(text, originalText) {
+            const needle = normalizeFullCaptureMatchText(originalText);
+            if (!needle) return -1;
+
+            const { normalized, sourceIndexes } = buildNormalizedIndex(text);
+            const normalizedIndex = normalized.indexOf(needle);
+            if (normalizedIndex < 0) return -1;
+
+            const normalizedEndIndex = normalizedIndex + needle.length - 1;
+            return sourceIndexes[normalizedEndIndex] + 1;
+        }
+
+        function formatEmbeddedReviews(reviews) {
+            const content = reviews
+                .map((review, index) => {
+                    const prefix = reviews.length > 1 ? `${index + 1}. ` : '';
+                    const username = review.username || '匿名';
+                    return `${prefix}${username}：${review.content || ''}`;
+                })
+                .join('；');
+
+            return `【评论：${content}】`;
+        }
+
+        function embedReviewsInText(text, reviewEntries) {
+            const insertions = [];
+            const seenInsertions = new Set();
+
+            reviewEntries.forEach((entry) => {
+                const insertIndex = findReviewInsertIndex(text, entry.originalText);
+                if (insertIndex < 0) {
+                    console.warn('[weread] 未匹配到评论原文', entry.originalText);
+                    return;
+                }
+
+                const key = `${insertIndex}\n${JSON.stringify(entry.reviews)}`;
+                if (seenInsertions.has(key)) return;
+
+                seenInsertions.add(key);
+                insertions.push({
+                    index: insertIndex,
+                    text: formatEmbeddedReviews(entry.reviews),
+                });
+            });
+
+            return insertions
+                .sort((a, b) => b.index - a.index)
+                .reduce((result, insertion) => (
+                    `${result.slice(0, insertion.index)}${insertion.text}${result.slice(insertion.index)}`
+                ), text);
+        }
+
+        async function collectCurrentPageReviewEntries(onProgress) {
+            const containers = getCurrentPageReviewContainers();
+            const triggers = getCurrentPageReviewTriggers();
+            const entries = [];
+            const seen = new Set();
+
+            console.log('[weread] 当前页评论容器数量', containers.length, '可点击数量', triggers.length);
+            if (triggers.length === 0) return entries;
+
+            for (let index = 0; index < containers.length; index += 1) {
+                const clickTarget = containers[index].querySelector('.wr_underline_wrapper');
+                if (!clickTarget) continue;
+
+                onProgress?.(index + 1, containers.length);
+
+                const existingPanel = getActiveReviewPanel();
+                if (existingPanel) {
+                    await closeReviewPanel(existingPanel);
+                    await sleep(getRandomReviewDelay());
+                }
+
+                clickReviewTrigger(clickTarget);
+
+                const panel = await waitForReviewPanel();
+                if (!panel) {
+                    console.warn('[weread] 评论弹窗未打开', index + 1, clickTarget);
+                    continue;
+                }
+
+                await sleep(getRandomReviewDelay());
+
+                const nativeCopyButton = panel.querySelector('.review_section_toolbar_item_copy');
+                const originalText = await getOriginalTextByNativeCopy(nativeCopyButton);
+
+                await loadAllReviewItems(panel);
+                const reviews = collectReviewItems(panel);
+                const key = `${normalizeFullCaptureMatchText(originalText)}\n${JSON.stringify(reviews)}`;
+
+                if (originalText && reviews.length > 0 && !seen.has(key)) {
+                    seen.add(key);
+                    entries.push({ originalText, reviews });
+                }
+
+                const closed = await closeReviewPanel(panel);
+                if (!closed) {
+                    console.warn('[weread] 评论弹窗关闭失败', index + 1);
+                }
+
+                await sleep(getRandomReviewDelay());
+            }
+
+            return entries;
+        }
+
         async function copyReviews(panel, button, nativeCopyButton) {
             setToolbarButtonText(button, '加载中...');
             button.style.pointerEvents = 'none';
@@ -392,6 +604,7 @@ export default defineContentScript({
         let isFullCaptureRunning = false;
         let fullCapturePages = [];
         let fullCaptureText = '';
+        let fullCaptureReviewCount = 0;
 
         document.getElementById('weread-full-capture')?.remove();
         document.getElementById('weread-copy-full-capture')?.remove();
@@ -448,9 +661,12 @@ export default defineContentScript({
         fullCaptureBtn.addEventListener('click', async () => {
             if (isFullCaptureRunning) return;
 
+            Object.assign(config, normalizeConfig(await appState.domainConfigStorage.getValue()));
+
             isFullCaptureRunning = true;
             fullCapturePages = [];
             fullCaptureText = '';
+            fullCaptureReviewCount = 0;
             copyFullBtn.style.display = 'none';
             fullCaptureBtn.style.background = '#6a1b9a';
 
@@ -458,7 +674,17 @@ export default defineContentScript({
                 fullCaptureBtn.textContent = `读取第 ${fullCapturePages.length + 1} 页...`;
 
                 const items = await requestCapture();
-                const text = buildText(items);
+                let text = buildText(items);
+                if (text && config.embedReviewsInFullCapture) {
+                    const pageNumber = fullCapturePages.length + 1;
+                    const reviewEntries = await collectCurrentPageReviewEntries((current, total) => {
+                        fullCaptureBtn.textContent = `读取第 ${pageNumber} 页评论 ${current}/${total}...`;
+                    });
+
+                    fullCaptureReviewCount += reviewEntries.reduce((total, entry) => total + entry.reviews.length, 0);
+                    text = embedReviewsInText(text, reviewEntries);
+                }
+
                 if (text) {
                     fullCapturePages.push(text);
                 }
@@ -487,9 +713,13 @@ export default defineContentScript({
                 return;
             }
 
-            fullCaptureBtn.textContent = `爬取完成(${fullCapturePages.length}页)`;
+            fullCaptureBtn.textContent = config.embedReviewsInFullCapture
+                ? `爬取完成(${fullCapturePages.length}页/${fullCaptureReviewCount}条评论)`
+                : `爬取完成(${fullCapturePages.length}页)`;
             fullCaptureBtn.style.background = '#43a047';
-            copyFullBtn.textContent = `复制全文(${fullCapturePages.length}页)`;
+            copyFullBtn.textContent = config.embedReviewsInFullCapture
+                ? `复制全文(${fullCapturePages.length}页/${fullCaptureReviewCount}条评论)`
+                : `复制全文(${fullCapturePages.length}页)`;
             copyFullBtn.style.display = 'block';
         });
 
@@ -510,7 +740,9 @@ export default defineContentScript({
             copyFullBtn.textContent = ok ? '已复制全文' : '复制失败';
             copyFullBtn.style.background = ok ? '#43a047' : '#e53935';
             setTimeout(() => {
-                copyFullBtn.textContent = `复制全文(${fullCapturePages.length}页)`;
+                copyFullBtn.textContent = config.embedReviewsInFullCapture
+                    ? `复制全文(${fullCapturePages.length}页/${fullCaptureReviewCount}条评论)`
+                    : `复制全文(${fullCapturePages.length}页)`;
                 copyFullBtn.style.background = '#f57c00';
             }, 1500);
         });

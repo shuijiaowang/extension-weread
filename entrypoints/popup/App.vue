@@ -60,6 +60,16 @@ async function saveConfig() {
                 <span>启用全文爬取</span>
             </label>
 
+            <label class="config-item config-sub-item">
+                <input
+                    type="checkbox"
+                    v-model="config.embedReviewsInFullCapture"
+                    :disabled="!config.showFullCaptureButton"
+                    @change="saveConfig"
+                />
+                <span>全文爬取 &gt; 是否嵌入评论</span>
+            </label>
+
             <label class="config-item">
                 <input type="checkbox" v-model="config.showChapterCopyButton" @change="saveConfig" />
                 <span>启用复制章节目录</span>
@@ -149,6 +159,16 @@ async function saveConfig() {
 .config-item input {
     width: 16px;
     height: 16px;
+}
+
+.config-sub-item {
+    margin-left: 18px;
+    background: #ffffff;
+}
+
+.config-sub-item:has(input:disabled) {
+    color: #9ca3af;
+    cursor: not-allowed;
 }
 
 .delay-config {
