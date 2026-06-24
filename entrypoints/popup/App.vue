@@ -5,19 +5,32 @@ import { appState, DEFAULT_DOMAIN_CONFIG } from '../../core/config.js';
 const config = reactive({ ...DEFAULT_DOMAIN_CONFIG });
 const isReady = ref(false);
 const saveTip = ref('');
+const showDelaySettings = ref(false);
 let saveTipTimer = null;
 
+const DELAY_FIELDS = [
+    { key: 'fullCapturePageDelayMs', label: '翻页后等待时间', step: 100 },
+    { key: 'reviewDelayMinMs', label: '点击划线后等待(最短)', step: 10 },
+    { key: 'reviewDelayMaxMs', label: '点击划线后等待(最长)', step: 10 },
+    { key: 'nativeCopyReadDelayMs', label: '复制后读取等待', step: 10 },
+    { key: 'reviewPanelTimeoutMs', label: '评论弹窗加载超时', step: 100 },
+    { key: 'reviewPanelPollIntervalMs', label: '评论弹窗检测间隔', step: 10 },
+    { key: 'captureRequestTimeoutMs', label: '页面抓取超时时间', step: 100 },
+    { key: 'uiFeedbackSuccessDelayMs', label: '复制成功提示持续', step: 100 },
+    { key: 'uiFeedbackInfoDelayMs', label: '操作提示持续时间', step: 100 },
+];
+
 function normalizeConfig(value = {}) {
-    return {
-        ...DEFAULT_DOMAIN_CONFIG,
-        ...value,
-        fullCapturePageDelayMs: normalizeDelay(value.fullCapturePageDelayMs),
-    };
+    const result = { ...DEFAULT_DOMAIN_CONFIG, ...value };
+    for (const field of DELAY_FIELDS) {
+        result[field.key] = normalizeDelay(value[field.key], DEFAULT_DOMAIN_CONFIG[field.key]);
+    }
+    return result;
 }
 
-function normalizeDelay(value) {
+function normalizeDelay(value, fallback) {
     const delay = Number(value);
-    if (!Number.isFinite(delay)) return DEFAULT_DOMAIN_CONFIG.fullCapturePageDelayMs;
+    if (!Number.isFinite(delay)) return fallback;
 
     return Math.max(0, Math.round(delay));
 }
@@ -28,7 +41,9 @@ onMounted(async () => {
 });
 
 async function saveConfig() {
-    config.fullCapturePageDelayMs = normalizeDelay(config.fullCapturePageDelayMs);
+    for (const field of DELAY_FIELDS) {
+        config[field.key] = normalizeDelay(config[field.key], DEFAULT_DOMAIN_CONFIG[field.key]);
+    }
     await appState.domainConfigStorage.setValue({ ...config });
 
     saveTip.value = '已保存';
@@ -81,17 +96,29 @@ async function saveConfig() {
             </label>
 
             <div class="delay-config">
-                <label for="full-capture-delay">全文爬取翻页时间</label>
-                <div class="delay-input">
-                    <input
-                        id="full-capture-delay"
-                        type="number"
-                        min="0"
-                        step="100"
-                        v-model.number="config.fullCapturePageDelayMs"
-                        @change="saveConfig"
-                    />
-                    <span>毫秒</span>
+                <div class="delay-config-header">
+                    <label for="delay-toggle" class="delay-toggle-label">
+                        <span>延迟时间配置</span>
+                    </label>
+                    <button id="delay-toggle" class="delay-toggle-btn" @click="showDelaySettings = !showDelaySettings">
+                        {{ showDelaySettings ? '收起' : '展开' }}
+                    </button>
+                </div>
+                <div v-show="showDelaySettings" class="delay-fields">
+                    <div v-for="field in DELAY_FIELDS" :key="field.key" class="delay-field">
+                        <label :for="field.key">{{ field.label }}</label>
+                        <div class="delay-input">
+                            <input
+                                :id="field.key"
+                                type="number"
+                                min="0"
+                                :step="field.step"
+                                v-model.number="config[field.key]"
+                                @change="saveConfig"
+                            />
+                            <span>毫秒</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -179,10 +206,48 @@ async function saveConfig() {
     text-align: left;
 }
 
-.delay-config label {
-    display: block;
-    margin-bottom: 8px;
+.delay-config-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.delay-toggle-label span {
     font-size: 14px;
+    font-weight: 500;
+}
+
+.delay-toggle-btn {
+    padding: 2px 10px;
+    font-size: 12px;
+    color: #6b7280;
+    background: #e5e7eb;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.delay-toggle-btn:hover {
+    background: #d1d5db;
+}
+
+.delay-fields {
+    display: grid;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.delay-field {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.delay-field label {
+    font-size: 13px;
+    color: #374151;
+    flex-shrink: 0;
 }
 
 .delay-input {

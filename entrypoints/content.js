@@ -7,15 +7,25 @@ export default defineContentScript({
     async main() {
         console.log('[weread] 复制按钮初始化');
 
-        function normalizeConfig(value = {}) {
-            const delay = Number(value.fullCapturePageDelayMs);
+        function normalizeDelay(value, fallback) {
+            const delay = Number(value);
+            return Number.isFinite(delay) ? Math.max(0, Math.round(delay)) : fallback;
+        }
 
+        function normalizeConfig(value = {}) {
+            const defaults = DEFAULT_DOMAIN_CONFIG;
             return {
-                ...DEFAULT_DOMAIN_CONFIG,
+                ...defaults,
                 ...value,
-                fullCapturePageDelayMs: Number.isFinite(delay)
-                    ? Math.max(0, Math.round(delay))
-                    : DEFAULT_DOMAIN_CONFIG.fullCapturePageDelayMs,
+                fullCapturePageDelayMs: normalizeDelay(value.fullCapturePageDelayMs, defaults.fullCapturePageDelayMs),
+                reviewDelayMinMs: normalizeDelay(value.reviewDelayMinMs, defaults.reviewDelayMinMs),
+                reviewDelayMaxMs: normalizeDelay(value.reviewDelayMaxMs, defaults.reviewDelayMaxMs),
+                nativeCopyReadDelayMs: normalizeDelay(value.nativeCopyReadDelayMs, defaults.nativeCopyReadDelayMs),
+                reviewPanelTimeoutMs: normalizeDelay(value.reviewPanelTimeoutMs, defaults.reviewPanelTimeoutMs),
+                reviewPanelPollIntervalMs: normalizeDelay(value.reviewPanelPollIntervalMs, defaults.reviewPanelPollIntervalMs),
+                captureRequestTimeoutMs: normalizeDelay(value.captureRequestTimeoutMs, defaults.captureRequestTimeoutMs),
+                uiFeedbackSuccessDelayMs: normalizeDelay(value.uiFeedbackSuccessDelayMs, defaults.uiFeedbackSuccessDelayMs),
+                uiFeedbackInfoDelayMs: normalizeDelay(value.uiFeedbackInfoDelayMs, defaults.uiFeedbackInfoDelayMs),
             };
         }
 
@@ -97,7 +107,7 @@ export default defineContentScript({
                     requestId,
                 }, '*');
 
-                timerId = setTimeout(() => finish([]), 1000);
+                timerId = setTimeout(() => finish([]), config.captureRequestTimeoutMs);
             });
         }
 
@@ -144,7 +154,9 @@ export default defineContentScript({
         }
 
         function getRandomReviewDelay() {
-            return 100 + Math.floor(Math.random() * 101);
+            const min = config.reviewDelayMinMs;
+            const max = config.reviewDelayMaxMs;
+            return min + Math.floor(Math.random() * (max - min + 1));
         }
 
         function getButtonTextElement(button) {
@@ -192,7 +204,7 @@ export default defineContentScript({
 
             try {
                 nativeCopyButton.click();
-                await sleep(120);
+                await sleep(config.nativeCopyReadDelayMs);
                 return normalizeReviewText(await navigator.clipboard.readText());
             } catch (error) {
                 console.warn('[weread] 读取划线原文失败', error);
@@ -298,24 +310,26 @@ export default defineContentScript({
             return panels.at(-1) || null;
         }
 
-        async function waitForReviewPanel(timeoutMs = 1200) {
+        async function waitForReviewPanel(timeoutMs) {
+            const timeout = timeoutMs ?? config.reviewPanelTimeoutMs;
             const start = Date.now();
 
-            while (Date.now() - start < timeoutMs) {
+            while (Date.now() - start < timeout) {
                 const panel = getActiveReviewPanel();
                 if (panel) return panel;
-                await sleep(80);
+                await sleep(config.reviewPanelPollIntervalMs);
             }
 
             return null;
         }
 
-        async function waitForReviewPanelClosed(timeoutMs = 1200) {
+        async function waitForReviewPanelClosed(timeoutMs) {
+            const timeout = timeoutMs ?? config.reviewPanelTimeoutMs;
             const start = Date.now();
 
-            while (Date.now() - start < timeoutMs) {
+            while (Date.now() - start < timeout) {
                 if (!getActiveReviewPanel()) return true;
-                await sleep(80);
+                await sleep(config.reviewPanelPollIntervalMs);
             }
 
             return false;
@@ -492,7 +506,7 @@ export default defineContentScript({
             const reviews = collectReviewItems(panel);
             if (reviews.length === 0) {
                 setToolbarButtonText(button, '暂无评论');
-                setTimeout(() => setToolbarButtonText(button, '复制评论'), 1200);
+                setTimeout(() => setToolbarButtonText(button, '复制评论'), config.uiFeedbackInfoDelayMs);
                 button.style.pointerEvents = '';
                 return;
             }
@@ -504,7 +518,7 @@ export default defineContentScript({
             setTimeout(() => {
                 setToolbarButtonText(button, '复制评论');
                 button.style.pointerEvents = '';
-            }, 1500);
+            }, config.uiFeedbackSuccessDelayMs);
         }
 
         function installCopyCommentsButton() {
@@ -536,7 +550,7 @@ export default defineContentScript({
                     const panel = toolbar.closest('.float_panel_position_wrapper');
                     if (!panel) {
                         setToolbarButtonText(button, '未找到弹窗');
-                        setTimeout(() => setToolbarButtonText(button, '复制评论'), 1200);
+                        setTimeout(() => setToolbarButtonText(button, '复制评论'), config.uiFeedbackInfoDelayMs);
                         return;
                     }
 
@@ -588,12 +602,12 @@ export default defineContentScript({
             const text = buildText(items);
 
             if (!text) {
-                setButtonState(copyBtn, '暂无内容', '#757575', 1200);
+                setButtonState(copyBtn, '暂无内容', '#757575', config.uiFeedbackInfoDelayMs);
                 return;
             }
 
             const ok = await copyText(text);
-            setButtonState(copyBtn, ok ? '已复制' : '复制失败', ok ? '#43a047' : '#e53935', 1500);
+            setButtonState(copyBtn, ok ? '已复制' : '复制失败', ok ? '#43a047' : '#e53935', config.uiFeedbackSuccessDelayMs);
         });
 
         document.body.appendChild(copyBtn);
@@ -709,7 +723,7 @@ export default defineContentScript({
                 setTimeout(() => {
                     fullCaptureBtn.textContent = '开始全文爬取';
                     fullCaptureBtn.style.background = '#8e24aa';
-                }, 1500);
+                }, config.uiFeedbackInfoDelayMs);
                 return;
             }
 
@@ -744,7 +758,7 @@ export default defineContentScript({
                     ? `复制全文(${fullCapturePages.length}页/${fullCaptureReviewCount}条评论)`
                     : `复制全文(${fullCapturePages.length}页)`;
                 copyFullBtn.style.background = '#f57c00';
-            }, 1500);
+            }, config.uiFeedbackSuccessDelayMs);
         });
 
         document.body.appendChild(fullCaptureBtn);
@@ -816,7 +830,7 @@ export default defineContentScript({
                 setTimeout(() => {
                     chapterBtn.textContent = '复制章节目录';
                     chapterBtn.style.background = '#43a047';
-                }, 1200);
+                }, config.uiFeedbackInfoDelayMs);
                 return;
             }
 
@@ -827,7 +841,7 @@ export default defineContentScript({
             setTimeout(() => {
                 chapterBtn.textContent = '复制章节目录';
                 chapterBtn.style.background = '#43a047';
-            }, 1500);
+            }, config.uiFeedbackSuccessDelayMs);
         });
 
         document.body.appendChild(chapterBtn);
