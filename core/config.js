@@ -8,7 +8,11 @@ export const APP_CONFIG = {
 // ... (保留 DEFAULT_DOMAIN_CONFIG) ...
 export const DEFAULT_DOMAIN_CONFIG = {
     pluginEnabled: false,
-    showCopyButton: true, //是否显示复制本页文字按钮
+    showCopyCurrentPageButton: true, //是否显示复制本页文字按钮
+    showFullCaptureButton: true, //是否显示全文爬取按钮
+    showChapterCopyButton: true, //是否显示复制章节目录按钮
+    showCopyCommentsButton: true, //是否显示评论复制按钮
+    fullCapturePageDelayMs: 1500, //全文爬取翻页等待时间
 };
 export const appState = {
     //--------该网站独有的存储属性-------
@@ -17,7 +21,11 @@ export const appState = {
     }),
     domainConfig: {
         isPluginEnabled: false, //是否启用插件
-        showCopyButton: false, //是否显示复制本页文字按钮
+        showCopyCurrentPageButton: false, //是否显示复制本页文字按钮
+        showFullCaptureButton: false, //是否显示全文爬取按钮
+        showChapterCopyButton: false, //是否显示复制章节目录按钮
+        showCopyCommentsButton: false, //是否显示评论复制按钮
+        fullCapturePageDelayMs: DEFAULT_DOMAIN_CONFIG.fullCapturePageDelayMs,
     },
     saveDomainConfig:async () => {
         await appState.domainConfigStorage.setValue(appState.domainConfig)

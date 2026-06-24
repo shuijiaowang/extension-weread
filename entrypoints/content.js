@@ -1,4 +1,4 @@
-import { appState } from '../core/config.js';
+import { appState, DEFAULT_DOMAIN_CONFIG } from '../core/config.js';
 
 export default defineContentScript({
     matches: ['https://weread.qq.com/web/reader/*'],
@@ -7,12 +7,44 @@ export default defineContentScript({
     async main() {
         console.log('[weread] 复制按钮初始化');
 
-        // 读取配置，判断是否显示按钮
-        const config = await appState.domainConfigStorage.getValue();
-        if (!config.showCopyButton) {
-            console.log('[weread] 复制按钮未启用，跳过');
+        function normalizeConfig(value = {}) {
+            const delay = Number(value.fullCapturePageDelayMs);
+
+            return {
+                ...DEFAULT_DOMAIN_CONFIG,
+                ...value,
+                fullCapturePageDelayMs: Number.isFinite(delay)
+                    ? Math.max(0, Math.round(delay))
+                    : DEFAULT_DOMAIN_CONFIG.fullCapturePageDelayMs,
+            };
+        }
+
+        const config = normalizeConfig(await appState.domainConfigStorage.getValue());
+        let floatingButtonIndex = 0;
+
+        function getNextFloatingTop() {
+            const top = 12 + floatingButtonIndex * 40;
+            floatingButtonIndex += 1;
+            return `${top}px`;
+        }
+
+        function removeInjectedButtons() {
             document.getElementById('weread-copy-current-page')?.remove();
+            document.getElementById('weread-full-capture')?.remove();
+            document.getElementById('weread-copy-full-capture')?.remove();
+            document.getElementById('weread-copy-chapters')?.remove();
             document.querySelectorAll('.weread-copy-comments-toolbar-item').forEach((button) => button.remove());
+        }
+
+        removeInjectedButtons();
+
+        if (
+            !config.showCopyCurrentPageButton
+            && !config.showFullCaptureButton
+            && !config.showChapterCopyButton
+            && !config.showCopyCommentsButton
+        ) {
+            console.log('[weread] 所有功能按钮均未启用，跳过');
             return;
         }
 
@@ -107,8 +139,8 @@ export default defineContentScript({
             return new Promise((resolve) => setTimeout(resolve, ms));
         }
 
-        function getRandomPageDelay() {
-            return 1000 + Math.floor(Math.random() * 1001);
+        function getPageDelay() {
+            return config.fullCapturePageDelayMs;
         }
 
         function getRandomReviewDelay() {
@@ -121,6 +153,34 @@ export default defineContentScript({
 
         function setToolbarButtonText(button, text) {
             getButtonTextElement(button).textContent = text;
+        }
+
+        function copyToolbarIconStyle(sourceButton, targetButton) {
+            const sourceIcon = sourceButton.querySelector('.review_section_toolbar_item_icon');
+            const targetIcon = targetButton.querySelector('.review_section_toolbar_item_icon');
+            if (!sourceIcon || !targetIcon) return;
+
+            const sourceStyle = window.getComputedStyle(sourceIcon);
+            [
+                'backgroundImage',
+                'backgroundSize',
+                'backgroundPosition',
+                'backgroundRepeat',
+                'backgroundColor',
+                'maskImage',
+                'maskSize',
+                'maskPosition',
+                'maskRepeat',
+                'webkitMaskImage',
+                'webkitMaskSize',
+                'webkitMaskPosition',
+                'webkitMaskRepeat',
+                'width',
+                'height',
+                'display',
+            ].forEach((property) => {
+                targetIcon.style[property] = sourceStyle[property];
+            });
         }
 
         function normalizeReviewText(text) {
@@ -251,6 +311,7 @@ export default defineContentScript({
                 button.classList.add('weread-copy-comments-toolbar-item');
                 button.dataset.wereadCopyCommentsBound = '1';
                 button.style.cursor = 'pointer';
+                copyToolbarIconStyle(nativeCopyButton, button);
                 button.querySelectorAll('*').forEach((child) => {
                     child.style.cursor = 'pointer';
                 });
@@ -274,17 +335,18 @@ export default defineContentScript({
             });
         }
 
-        installCopyCommentsButton();
-        new MutationObserver(installCopyCommentsButton).observe(document.body, { childList: true, subtree: true });
+        if (config.showCopyCommentsButton) {
+            installCopyCommentsButton();
+            new MutationObserver(installCopyCommentsButton).observe(document.body, { childList: true, subtree: true });
+        }
 
-        document.getElementById('weread-copy-current-page')?.remove();
-
+        if (config.showCopyCurrentPageButton) {
         const copyBtn = document.createElement('div');
         copyBtn.id = 'weread-copy-current-page';
         copyBtn.textContent = '复制本页文字';
         Object.assign(copyBtn.style, {
             position: 'fixed',
-            top: '12px',
+            top: getNextFloatingTop(),
             right: '12px',
             zIndex: '2147483647',
             padding: '8px 16px',
@@ -323,8 +385,10 @@ export default defineContentScript({
         });
 
         document.body.appendChild(copyBtn);
+        }
 
         // ========== 全文爬取按钮 ==========
+        if (config.showFullCaptureButton) {
         let isFullCaptureRunning = false;
         let fullCapturePages = [];
         let fullCaptureText = '';
@@ -337,7 +401,7 @@ export default defineContentScript({
         fullCaptureBtn.textContent = '开始全文爬取';
         Object.assign(fullCaptureBtn.style, {
             position: 'fixed',
-            top: '52px',
+            top: getNextFloatingTop(),
             right: '12px',
             zIndex: '2147483647',
             padding: '8px 16px',
@@ -357,7 +421,7 @@ export default defineContentScript({
         copyFullBtn.textContent = '复制全文';
         Object.assign(copyFullBtn.style, {
             position: 'fixed',
-            top: '92px',
+            top: getNextFloatingTop(),
             right: '12px',
             zIndex: '2147483647',
             padding: '8px 16px',
@@ -405,7 +469,7 @@ export default defineContentScript({
                 if (!nextBtn || nextBtn.parentElement?.style.display === 'none') break;
 
                 nextBtn.click();
-                const delay = getRandomPageDelay();
+                const delay = getPageDelay();
                 fullCaptureBtn.textContent = `等待翻页 ${Math.round(delay / 100) / 10}s...`;
                 await sleep(delay);
             }
@@ -453,8 +517,10 @@ export default defineContentScript({
 
         document.body.appendChild(fullCaptureBtn);
         document.body.appendChild(copyFullBtn);
+        }
 
         // ========== 复制章节目录按钮 ==========
+        if (config.showChapterCopyButton) {
         function getChapterInfo() {
             const catalogList = document.querySelector('.readerCatalog_list');
             if (!catalogList) return [];
@@ -483,7 +549,7 @@ export default defineContentScript({
         chapterBtn.textContent = '复制章节目录';
         Object.assign(chapterBtn.style, {
             position: 'fixed',
-            top: '132px',
+            top: getNextFloatingTop(),
             right: '12px',
             zIndex: '2147483647',
             padding: '8px 16px',
@@ -533,5 +599,6 @@ export default defineContentScript({
         });
 
         document.body.appendChild(chapterBtn);
+        }
     },
 });
