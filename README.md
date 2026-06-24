@@ -1,7 +1,7 @@
-# WXT + Vue 3
+【不要做】不要长时间陷入深度思考，适当尽快锁定位置尝试修改，不确定就去联网搜索，
+不要全项目扫描；不要改无关代码；不要跑全量构建，不要自动执行全量测试；
+不要循环修复；不要测试我会手动测试的，不需要创建文档说明，不需要考虑旧数据，测试阶段可清除。
+【输出要求】先给核心结论，再给修改点；代码量改动适量，不要过度设计。
 
-This template should help get you started developing with Vue 3 in WXT.
 
-## Recommended IDE Setup
 
-- [VS Code](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar).
