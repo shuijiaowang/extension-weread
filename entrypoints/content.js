@@ -12,6 +12,7 @@ export default defineContentScript({
         if (!config.showCopyButton) {
             console.log('[weread] 复制按钮未启用，跳过');
             document.getElementById('weread-copy-current-page')?.remove();
+            document.querySelectorAll('.weread-copy-comments-toolbar-item').forEach((button) => button.remove());
             return;
         }
 
@@ -109,6 +110,172 @@ export default defineContentScript({
         function getRandomPageDelay() {
             return 1000 + Math.floor(Math.random() * 1001);
         }
+
+        function getRandomReviewDelay() {
+            return 100 + Math.floor(Math.random() * 101);
+        }
+
+        function getButtonTextElement(button) {
+            return button.querySelector('.review_section_toolbar_item_text') || button;
+        }
+
+        function setToolbarButtonText(button, text) {
+            getButtonTextElement(button).textContent = text;
+        }
+
+        function normalizeReviewText(text) {
+            return String(text ?? '').replace(/\s+/g, ' ').trim();
+        }
+
+        async function getOriginalTextByNativeCopy(nativeCopyButton) {
+            if (!nativeCopyButton || !navigator.clipboard?.readText) return '';
+
+            try {
+                nativeCopyButton.click();
+                await sleep(120);
+                return normalizeReviewText(await navigator.clipboard.readText());
+            } catch (error) {
+                console.warn('[weread] 读取划线原文失败', error);
+                return '';
+            }
+        }
+
+        function collectReviewItems(panel) {
+            const itemNodes = panel.querySelectorAll(
+                '.reader_floatReviewsPanel_list_wrapper .reader_float_reviews_panel_item .reader_float_reviews_panel_item_top_container',
+            );
+            const reviews = [];
+            const seen = new Set();
+
+            itemNodes.forEach((item) => {
+                const username = normalizeReviewText(
+                    item.querySelector('.reader_float_reviews_panel_item_header')?.textContent,
+                );
+                const content = normalizeReviewText(
+                    item.querySelector('.reader_float_reviews_panel_item_content')?.textContent,
+                );
+
+                if (!username && !content) return;
+
+                const key = `${username}\n${content}`;
+                if (seen.has(key)) return;
+
+                seen.add(key);
+                reviews.push({ username, content });
+            });
+
+            return reviews;
+        }
+
+        async function loadAllReviewItems(panel) {
+            const content = panel.querySelector('.reader_float_panel_content_wrapper');
+            if (!content) return;
+
+            let lastScrollTop = -1;
+            let lastCount = -1;
+            let stableTimes = 0;
+
+            for (let i = 0; i < 15; i += 1) {
+                content.scrollBy(0, 200);
+                await sleep(getRandomReviewDelay());
+
+                const count = collectReviewItems(panel).length;
+                if (content.scrollTop === lastScrollTop && count === lastCount) {
+                    stableTimes += 1;
+                } else {
+                    stableTimes = 0;
+                }
+
+                if (stableTimes >= 3) break;
+
+                lastScrollTop = content.scrollTop;
+                lastCount = count;
+            }
+        }
+
+        function buildReviewText(originalText, reviews) {
+            const lines = [];
+
+            if (originalText) {
+                lines.push('原文：', originalText, '');
+            }
+
+            lines.push(`评论(${reviews.length})：`);
+            reviews.forEach((review, index) => {
+                const username = review.username || '匿名';
+                const content = review.content || '';
+                lines.push(`${index + 1}. ${username}：${content}`);
+            });
+
+            return lines.join('\n');
+        }
+
+        async function copyReviews(panel, button, nativeCopyButton) {
+            setToolbarButtonText(button, '加载中...');
+            button.style.pointerEvents = 'none';
+
+            const originalText = await getOriginalTextByNativeCopy(nativeCopyButton);
+            await loadAllReviewItems(panel);
+
+            const reviews = collectReviewItems(panel);
+            if (reviews.length === 0) {
+                setToolbarButtonText(button, '暂无评论');
+                setTimeout(() => setToolbarButtonText(button, '复制评论'), 1200);
+                button.style.pointerEvents = '';
+                return;
+            }
+
+            setToolbarButtonText(button, '复制中...');
+            const ok = await copyText(buildReviewText(originalText, reviews));
+            setToolbarButtonText(button, ok ? `已复制(${reviews.length})` : '复制失败');
+
+            setTimeout(() => {
+                setToolbarButtonText(button, '复制评论');
+                button.style.pointerEvents = '';
+            }, 1500);
+        }
+
+        function installCopyCommentsButton() {
+            const toolbars = document.querySelectorAll(
+                '.float_panel_position_wrapper .reader_float_panel_header_wrapper .review_section_toolbar_items_wrapper',
+            );
+
+            toolbars.forEach((toolbar) => {
+                if (toolbar.querySelector('.weread-copy-comments-toolbar-item')) return;
+
+                const nativeCopyButton = toolbar.querySelector('.review_section_toolbar_item_copy');
+                if (!nativeCopyButton) return;
+
+                const button = nativeCopyButton.cloneNode(true);
+                button.classList.remove('review_section_toolbar_item_copy');
+                button.classList.add('weread-copy-comments-toolbar-item');
+                button.dataset.wereadCopyCommentsBound = '1';
+                button.style.cursor = 'pointer';
+                button.querySelectorAll('*').forEach((child) => {
+                    child.style.cursor = 'pointer';
+                });
+                setToolbarButtonText(button, '复制评论');
+
+                button.addEventListener('click', async (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    const panel = toolbar.closest('.float_panel_position_wrapper');
+                    if (!panel) {
+                        setToolbarButtonText(button, '未找到弹窗');
+                        setTimeout(() => setToolbarButtonText(button, '复制评论'), 1200);
+                        return;
+                    }
+
+                    await copyReviews(panel, button, nativeCopyButton);
+                });
+
+                nativeCopyButton.insertAdjacentElement('afterend', button);
+            });
+        }
+
+        installCopyCommentsButton();
+        new MutationObserver(installCopyCommentsButton).observe(document.body, { childList: true, subtree: true });
 
         document.getElementById('weread-copy-current-page')?.remove();
 
