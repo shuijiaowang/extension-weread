@@ -9,15 +9,17 @@ const showDelaySettings = ref(false);
 let saveTipTimer = null;
 
 const DELAY_FIELDS = [
-    { key: 'fullCapturePageDelayMs', label: '翻页后等待时间', step: 100 },
-    { key: 'reviewDelayMinMs', label: '点击划线后等待(最短)', step: 10 },
-    { key: 'reviewDelayMaxMs', label: '点击划线后等待(最长)', step: 10 },
-    { key: 'nativeCopyReadDelayMs', label: '复制后读取等待', step: 10 },
-    { key: 'reviewPanelTimeoutMs', label: '评论弹窗加载超时', step: 100 },
-    { key: 'reviewPanelPollIntervalMs', label: '评论弹窗检测间隔', step: 10 },
-    { key: 'captureRequestTimeoutMs', label: '页面抓取超时时间', step: 100 },
-    { key: 'uiFeedbackSuccessDelayMs', label: '复制成功提示持续', step: 100 },
-    { key: 'uiFeedbackInfoDelayMs', label: '操作提示持续时间', step: 100 },
+    { key: 'fullCapturePageDelayMs', label: '翻页后等待时间', step: 100, unit: '毫秒' },
+    { key: 'reviewDelayMinMs', label: '点击划线后等待(最短)', step: 10, unit: '毫秒' },
+    { key: 'reviewDelayMaxMs', label: '点击划线后等待(最长)', step: 10, unit: '毫秒' },
+    { key: 'nativeCopyReadDelayMs', label: '复制后读取等待', step: 10, unit: '毫秒' },
+    { key: 'reviewPanelTimeoutMs', label: '评论弹窗加载超时', step: 100, unit: '毫秒' },
+    { key: 'reviewPanelPollIntervalMs', label: '评论弹窗检测间隔', step: 10, unit: '毫秒' },
+    { key: 'reviewScrollDistance', label: '评论每次滚动距离', step: 50, unit: '像素' },
+    { key: 'reviewScrollMaxAttempts', label: '评论滚动加载最大次数', step: 1, unit: '次' },
+    { key: 'captureRequestTimeoutMs', label: '页面抓取超时时间', step: 100, unit: '毫秒' },
+    { key: 'uiFeedbackSuccessDelayMs', label: '复制成功提示持续', step: 100, unit: '毫秒' },
+    { key: 'uiFeedbackInfoDelayMs', label: '操作提示持续时间', step: 100, unit: '毫秒' },
 ];
 
 function normalizeConfig(value = {}) {
@@ -116,7 +118,7 @@ async function saveConfig() {
                                 v-model.number="config[field.key]"
                                 @change="saveConfig"
                             />
-                            <span>毫秒</span>
+                            <span>{{ field.unit }}</span>
                         </div>
                     </div>
                 </div>

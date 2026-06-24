@@ -23,6 +23,8 @@ export default defineContentScript({
                 nativeCopyReadDelayMs: normalizeDelay(value.nativeCopyReadDelayMs, defaults.nativeCopyReadDelayMs),
                 reviewPanelTimeoutMs: normalizeDelay(value.reviewPanelTimeoutMs, defaults.reviewPanelTimeoutMs),
                 reviewPanelPollIntervalMs: normalizeDelay(value.reviewPanelPollIntervalMs, defaults.reviewPanelPollIntervalMs),
+                reviewScrollDistance: normalizeDelay(value.reviewScrollDistance, defaults.reviewScrollDistance),
+                reviewScrollMaxAttempts: normalizeDelay(value.reviewScrollMaxAttempts, defaults.reviewScrollMaxAttempts),
                 captureRequestTimeoutMs: normalizeDelay(value.captureRequestTimeoutMs, defaults.captureRequestTimeoutMs),
                 uiFeedbackSuccessDelayMs: normalizeDelay(value.uiFeedbackSuccessDelayMs, defaults.uiFeedbackSuccessDelayMs),
                 uiFeedbackInfoDelayMs: normalizeDelay(value.uiFeedbackInfoDelayMs, defaults.uiFeedbackInfoDelayMs),
@@ -247,8 +249,8 @@ export default defineContentScript({
             let lastCount = -1;
             let stableTimes = 0;
 
-            for (let i = 0; i < 15; i += 1) {
-                content.scrollBy(0, 200);
+            for (let i = 0; i < config.reviewScrollMaxAttempts; i += 1) {
+                content.scrollBy(0, config.reviewScrollDistance);
                 await sleep(getRandomReviewDelay());
 
                 const count = collectReviewItems(panel).length;

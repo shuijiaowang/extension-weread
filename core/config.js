@@ -13,12 +13,14 @@ export const DEFAULT_DOMAIN_CONFIG = {
     embedReviewsInFullCapture: false, //全文爬取时是否嵌入评论
     showChapterCopyButton: true, //是否显示复制章节目录按钮
     showCopyCommentsButton: true, //是否显示评论复制按钮
-    fullCapturePageDelayMs: 1500, //翻页后等待时间
-    reviewDelayMinMs: 100, //点击划线后等待(最短)
-    reviewDelayMaxMs: 200, //点击划线后等待(最长)
-    nativeCopyReadDelayMs: 120, //复制后读取等待
-    reviewPanelTimeoutMs: 1200, //评论弹窗加载超时
+    fullCapturePageDelayMs: 2000, //翻页后等待时间
+    reviewDelayMinMs: 800, //点击划线后等待(最短)
+    reviewDelayMaxMs: 1200, //点击划线后等待(最长)
+    nativeCopyReadDelayMs: 100, //复制后读取等待
+    reviewPanelTimeoutMs: 1500, //评论弹窗加载超时
     reviewPanelPollIntervalMs: 80, //评论弹窗检测间隔
+    reviewScrollDistance: 200, //评论列表每次滚动距离(px)
+    reviewScrollMaxAttempts: 15, //评论列表滚动加载最大次数
     captureRequestTimeoutMs: 1000, //页面抓取超时时间
     uiFeedbackSuccessDelayMs: 1500, //复制成功提示持续
     uiFeedbackInfoDelayMs: 1200, //操作提示持续时间
@@ -41,6 +43,8 @@ export const appState = {
         nativeCopyReadDelayMs: DEFAULT_DOMAIN_CONFIG.nativeCopyReadDelayMs,
         reviewPanelTimeoutMs: DEFAULT_DOMAIN_CONFIG.reviewPanelTimeoutMs,
         reviewPanelPollIntervalMs: DEFAULT_DOMAIN_CONFIG.reviewPanelPollIntervalMs,
+        reviewScrollDistance: DEFAULT_DOMAIN_CONFIG.reviewScrollDistance,
+        reviewScrollMaxAttempts: DEFAULT_DOMAIN_CONFIG.reviewScrollMaxAttempts,
         captureRequestTimeoutMs: DEFAULT_DOMAIN_CONFIG.captureRequestTimeoutMs,
         uiFeedbackSuccessDelayMs: DEFAULT_DOMAIN_CONFIG.uiFeedbackSuccessDelayMs,
         uiFeedbackInfoDelayMs: DEFAULT_DOMAIN_CONFIG.uiFeedbackInfoDelayMs,
