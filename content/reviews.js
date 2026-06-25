@@ -191,7 +191,7 @@ async function closeReviewPanel(panel, config) {
 }
 
 function getReviewTriggerRow(wrapper) {
-    return wrapper?.parentElement?.parentElement?.parentElement || null;
+    return wrapper?.parentElement?.parentElement?.parentElement?.parentElement || null;
 }
 
 function clickReviewTrigger(element) {
@@ -200,10 +200,10 @@ function clickReviewTrigger(element) {
 }
 
 function getCurrentPageReviewContainers() {
-    const wrapper = document.querySelector('.wr_underline_wrapper');
-    if (!wrapper) return [];
+    const trigger = document.querySelector('.wr_underline_thought');
+    if (!trigger) return [];
 
-    const row = getReviewTriggerRow(wrapper);
+    const row = getReviewTriggerRow(trigger);
     if (!row) return [];
 
     return Array.from(row.querySelectorAll(':scope > div'));
@@ -216,7 +216,7 @@ function getCurrentPageReviewTriggers() {
 }
 
 function getLastReviewTrigger(container) {
-    return Array.from(container?.querySelectorAll('.wr_underline_wrapper') || [])
+    return Array.from(container?.querySelectorAll('.wr_underline_thought') || [])
         .filter(isInteractableElement)
         .at(-1) || null;
 }
@@ -261,8 +261,8 @@ function getReviewInsertInfo(trigger, pageItems, itemEndOffsets, pageText) {
             localRect: localRect ? summarizeRect(localRect) : null,
             canvasId,
             triggerText: normalizeReviewText(trigger?.textContent),
-            wrapperCount: trigger?.parentElement
-                ? trigger.parentElement.querySelectorAll('.wr_underline_wrapper').length
+            thoughtCount: trigger?.parentElement
+                ? trigger.parentElement.querySelectorAll('.wr_underline_thought').length
                 : 0,
             matchedCount: matchedItems.length,
             matchedItems: matchedItems.map(summarizeCaptureItem),

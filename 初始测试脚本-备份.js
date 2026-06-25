@@ -69,6 +69,9 @@ t[0].querySelector(".wr_underline_wrapper").click() //点击触发评论
 t[1].querySelector(".wr_underline_wrapper").click() //点击触发评论
 
 t[0].querySelectorAll(".wr_underline_wrapper")[-1].click() //因为微信读书的一句话换行多处，最后一处的坐标才算是对的。
+
+document.querySelector(".wr_underline_thought")
+
 const body = document.querySelector(".float_panel_position_wrapper") //评论弹窗
 const h=body.querySelector(".reader_float_panel_header_wrapper .review_section_toolbar_items_wrapper") //复制、划线、写想法、AI问书
 const copybutton=h.querySelector(".review_section_toolbar_item_copy") //.click()，点击复制，这个复制是文章画线的句子，这个需要用来获取原文内容
@@ -89,7 +92,8 @@ const item_content=item.querySelector(".reader_float_reviews_panel_item_content"
 //这是未加载的
 // <div data-v-8ba546d8="" data-v-1358ac80="" class="reader_floatReviewsPanel_list_loading"><div data-v-8ba546d8="" data-v-1358ac80="" class="reader_floatReviewsPanel_list_loading_1"></div><div data-v-8ba546d8="" data-v-1358ac80="" class="reader_floatReviewsPanel_list_loading_2"></div><div data-v-8ba546d8="" data-v-1358ac80="" class="reader_floatReviewsPanel_list_loading_3"></div></div>
 
-
+const t=document.querySelector(".wr_underline_thought").parentElement.parentElement.parentElement.parentElement.querySelectorAll(":scope > div")
+t[0].querySelector(".wr_underline_thought").click() //点击触发评论
 
 
 
