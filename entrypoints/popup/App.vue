@@ -24,11 +24,18 @@ const DELAY_FIELDS = [
     { key: 'uiFeedbackInfoDelayMs', label: '操作提示持续时间', step: 100, unit: '毫秒' },
 ];
 
+function normalizeRate(value, fallback) {
+    const rate = Number(value);
+    if (!Number.isFinite(rate)) return fallback;
+    return Math.min(10, Math.max(0.1, Math.round(rate * 10) / 10));
+}
+
 function normalizeConfig(value = {}) {
     const result = { ...DEFAULT_DOMAIN_CONFIG, ...value };
     for (const field of DELAY_FIELDS) {
         result[field.key] = normalizeDelay(value[field.key], DEFAULT_DOMAIN_CONFIG[field.key]);
     }
+    result.readAloudRate = normalizeRate(value.readAloudRate, DEFAULT_DOMAIN_CONFIG.readAloudRate);
     return result;
 }
 
@@ -49,6 +56,7 @@ async function saveConfig() {
     for (const field of DELAY_FIELDS) {
         config[field.key] = normalizeDelay(config[field.key], DEFAULT_DOMAIN_CONFIG[field.key]);
     }
+    config.readAloudRate = normalizeRate(config.readAloudRate, DEFAULT_DOMAIN_CONFIG.readAloudRate);
     await appState.domainConfigStorage.setValue({ ...config });
 
     saveTip.value = '已保存';
@@ -135,6 +143,38 @@ async function clearHistory() {
                 <input type="checkbox" v-model="config.showCopyCommentsButton" @change="saveConfig" />
                 <span>启用评论复制</span>
             </label>
+
+            <label class="config-item">
+                <input type="checkbox" v-model="config.showReadAloudButton" @change="saveConfig" />
+                <span>启用朗读本页</span>
+            </label>
+
+            <label class="config-item config-sub-item">
+                <input
+                    type="checkbox"
+                    v-model="config.embedReviewsInReadAloud"
+                    :disabled="!config.showReadAloudButton"
+                    @change="saveConfig"
+                />
+                <span>朗读本页 &gt; 是否读评论</span>
+            </label>
+
+            <div class="delay-field read-aloud-rate">
+                <label for="readAloudRate">朗读倍速</label>
+                <div class="delay-input">
+                    <input
+                        id="readAloudRate"
+                        type="number"
+                        min="0.1"
+                        max="10"
+                        step="0.1"
+                        v-model.number="config.readAloudRate"
+                        :disabled="!config.showReadAloudButton"
+                        @change="saveConfig"
+                    />
+                    <span>倍</span>
+                </div>
+            </div>
 
             <div class="delay-config">
                 <div class="delay-config-header">
@@ -350,6 +390,13 @@ async function clearHistory() {
 .loading {
     color: #6b7280;
     font-size: 12px;
+}
+
+.read-aloud-rate {
+    padding: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
 }
 
 .history-card {

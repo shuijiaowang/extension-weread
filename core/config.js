@@ -13,6 +13,9 @@ export const DEFAULT_DOMAIN_CONFIG = {
     embedReviewsInFullCapture: false, //全文爬取时是否嵌入评论
     showChapterCopyButton: true, //是否显示复制章节目录按钮
     showCopyCommentsButton: true, //是否显示评论复制按钮
+    showReadAloudButton: true, //是否显示朗读本页按钮
+    embedReviewsInReadAloud: false, //朗读本页时是否嵌入评论(口语格式)
+    readAloudRate: 1.0, //朗读倍速
     fullCapturePageDelayMs: 2000, //翻页后等待时间
     reviewDelayMinMs: 800, //点击划线后等待(最短)
     reviewDelayMaxMs: 1200, //点击划线后等待(最长)
@@ -44,6 +47,9 @@ export const appState = {
         embedReviewsInFullCapture: DEFAULT_DOMAIN_CONFIG.embedReviewsInFullCapture,
         showChapterCopyButton: false, //是否显示复制章节目录按钮
         showCopyCommentsButton: false, //是否显示评论复制按钮
+        showReadAloudButton: false,
+        embedReviewsInReadAloud: DEFAULT_DOMAIN_CONFIG.embedReviewsInReadAloud,
+        readAloudRate: DEFAULT_DOMAIN_CONFIG.readAloudRate,
         fullCapturePageDelayMs: DEFAULT_DOMAIN_CONFIG.fullCapturePageDelayMs,
         reviewDelayMinMs: DEFAULT_DOMAIN_CONFIG.reviewDelayMinMs,
         reviewDelayMaxMs: DEFAULT_DOMAIN_CONFIG.reviewDelayMaxMs,
