@@ -40,11 +40,11 @@ const TIMING_FIELDS_COMMON = [
         unit: '像素',
     },
     {
-        key: 'reviewScrollMaxAttempts',
-        label: '评论滚动次数',
-        hint: '单条划线最多滚动几次以加载全部评论',
+        key: 'reviewItemLimit',
+        label: '评论数量上限',
+        hint: '单条划线最多抓取多少条已加载完成的评论',
         step: 1,
-        unit: '次',
+        unit: '条',
     },
 ];
 

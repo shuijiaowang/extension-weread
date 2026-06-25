@@ -28,6 +28,7 @@ export function normalizeConfig(value = {}) {
     const {
         reviewDelayMinMs: _min,
         reviewDelayMaxMs: _max,
+        reviewScrollMaxAttempts: _legacyReviewScrollMaxAttempts,
         ...rest
     } = value;
 
@@ -40,7 +41,7 @@ export function normalizeConfig(value = {}) {
         reviewPanelTimeoutMs: normalizeDelay(value.reviewPanelTimeoutMs, defaults.reviewPanelTimeoutMs),
         reviewPanelPollIntervalMs: normalizeDelay(value.reviewPanelPollIntervalMs, defaults.reviewPanelPollIntervalMs),
         reviewScrollDistance: normalizeDelay(value.reviewScrollDistance, defaults.reviewScrollDistance),
-        reviewScrollMaxAttempts: normalizeDelay(value.reviewScrollMaxAttempts, defaults.reviewScrollMaxAttempts),
+        reviewItemLimit: normalizeDelay(value.reviewItemLimit, defaults.reviewItemLimit),
         reviewScrollDelayMs: normalizeDelay(value.reviewScrollDelayMs, defaults.reviewScrollDelayMs),
         captureRequestTimeoutMs: normalizeDelay(value.captureRequestTimeoutMs, defaults.captureRequestTimeoutMs),
         uiFeedbackSuccessDelayMs: normalizeDelay(value.uiFeedbackSuccessDelayMs, defaults.uiFeedbackSuccessDelayMs),

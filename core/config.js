@@ -23,7 +23,7 @@ export const DEFAULT_DOMAIN_CONFIG = {
     reviewPanelTimeoutMs: 1500, //评论弹窗加载超时
     reviewPanelPollIntervalMs: 80, //评论弹窗检测间隔
     reviewScrollDistance: 200, //评论列表每次滚动距离(px)
-    reviewScrollMaxAttempts: 15, //评论列表滚动加载最大次数
+    reviewItemLimit: 15, //单条划线最多抓取多少条评论
     reviewScrollDelayMs: 200, //评论滚动后等待时间
     captureRequestTimeoutMs: 1000, //页面抓取超时时间
     uiFeedbackSuccessDelayMs: 1500, //复制成功提示持续
@@ -57,7 +57,7 @@ export const appState = {
         reviewPanelTimeoutMs: DEFAULT_DOMAIN_CONFIG.reviewPanelTimeoutMs,
         reviewPanelPollIntervalMs: DEFAULT_DOMAIN_CONFIG.reviewPanelPollIntervalMs,
         reviewScrollDistance: DEFAULT_DOMAIN_CONFIG.reviewScrollDistance,
-        reviewScrollMaxAttempts: DEFAULT_DOMAIN_CONFIG.reviewScrollMaxAttempts,
+        reviewItemLimit: DEFAULT_DOMAIN_CONFIG.reviewItemLimit,
         reviewScrollDelayMs: DEFAULT_DOMAIN_CONFIG.reviewScrollDelayMs,
         captureRequestTimeoutMs: DEFAULT_DOMAIN_CONFIG.captureRequestTimeoutMs,
         uiFeedbackSuccessDelayMs: DEFAULT_DOMAIN_CONFIG.uiFeedbackSuccessDelayMs,

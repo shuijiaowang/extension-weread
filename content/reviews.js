@@ -104,28 +104,26 @@ function collectReviewItems(panel) {
 
 async function loadAllReviewItems(panel, config) {
     const content = panel.querySelector('.reader_float_panel_content_wrapper');
-    if (!content) return;
+    if (!content) return [];
 
-    let lastScrollTop = -1;
-    let lastCount = -1;
-    let stableTimes = 0;
+    const limit = Math.max(1, Number(config.reviewItemLimit) || 1);
+    let reviews = collectReviewItems(panel);
+    if (reviews.length >= limit) return reviews.slice(0, limit);
 
-    for (let i = 0; i < config.reviewScrollMaxAttempts; i += 1) {
+    while (true) {
+        const previousScrollTop = content.scrollTop;
         content.scrollBy(0, config.reviewScrollDistance);
         await sleep(config.reviewScrollDelayMs);
 
-        const count = collectReviewItems(panel).length;
-        if (content.scrollTop === lastScrollTop && count === lastCount) {
-            stableTimes += 1;
-        } else {
-            stableTimes = 0;
-        }
+        reviews = collectReviewItems(panel);
+        if (reviews.length >= limit) return reviews.slice(0, limit);
 
-        if (stableTimes >= 3) break;
-
-        lastScrollTop = content.scrollTop;
-        lastCount = count;
+        // 微信里读书会先生成占位 DOM，只有滚动到位后内容才会真正填充。
+        // 所以这里以“已抓到的有效评论数”为准，再结合 scrollTop 是否不再变化判断到底。
+        if (content.scrollTop === previousScrollTop) break;
     }
+
+    return reviews.slice(0, limit);
 }
 
 function buildReviewText(originalText, reviews) {
@@ -468,8 +466,7 @@ export async function collectCurrentPageReviewEntries(pageItems, itemEndOffsets,
 
         await sleep(getReviewDelay(config));
 
-        await loadAllReviewItems(panel, config);
-        const reviews = collectReviewItems(panel);
+        const reviews = await loadAllReviewItems(panel, config);
 
         logDiag({
             phase: 'collectReviews.item',
@@ -513,9 +510,7 @@ async function copyReviews(panel, button, nativeCopyButton, config) {
     button.style.pointerEvents = 'none';
 
     const originalText = await getOriginalTextByNativeCopy(nativeCopyButton, config);
-    await loadAllReviewItems(panel, config);
-
-    const reviews = collectReviewItems(panel);
+    const reviews = await loadAllReviewItems(panel, config);
     if (reviews.length === 0) {
         setToolbarButtonText(button, '暂无评论');
         setTimeout(() => setToolbarButtonText(button, '复制评论'), config.uiFeedbackInfoDelayMs);
