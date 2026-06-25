@@ -1,50 +1,71 @@
 <script setup>
-import { reactive, ref, onMounted } from 'vue';
+import { reactive, ref, computed, onMounted } from 'vue';
 import { appState, DEFAULT_DOMAIN_CONFIG } from '../../core/config.js';
+import { normalizeConfig } from '../../content/normalizeConfig.js';
 
 const config = reactive({ ...DEFAULT_DOMAIN_CONFIG });
 const isReady = ref(false);
 const saveTip = ref('');
-const showDelaySettings = ref(false);
+const showAdvancedSettings = ref(false);
 const captureHistory = ref([]);
 let saveTipTimer = null;
 
-const DELAY_FIELDS = [
-    { key: 'fullCapturePageDelayMs', label: '翻页后等待时间', step: 100, unit: '毫秒' },
-    { key: 'reviewDelayMinMs', label: '点击划线后等待(最短)', step: 10, unit: '毫秒' },
-    { key: 'reviewDelayMaxMs', label: '点击划线后等待(最长)', step: 10, unit: '毫秒' },
-    { key: 'nativeCopyReadDelayMs', label: '复制后读取等待', step: 10, unit: '毫秒' },
+const TIMING_FIELDS_COMMON = [
+    {
+        key: 'fullCapturePageDelayMs',
+        label: '翻页间隔',
+        hint: '全文爬取每翻一页后等待，越大越慢但更稳',
+        step: 100,
+        unit: '毫秒',
+    },
+    {
+        key: 'reviewDelayMs',
+        label: '点击评论间隔',
+        hint: '每次点击划线、打开评论弹窗后的等待',
+        step: 50,
+        unit: '毫秒',
+    },
+    {
+        key: 'reviewScrollDelayMs',
+        label: '评论滚动间隔',
+        hint: '加载更多评论时，每次向下滚动后的等待',
+        step: 50,
+        unit: '毫秒',
+    },
+    {
+        key: 'reviewScrollDistance',
+        label: '评论滚动距离',
+        hint: '每次向下滚动的像素，越大加载越快但越容易漏评',
+        step: 50,
+        unit: '像素',
+    },
+    {
+        key: 'reviewScrollMaxAttempts',
+        label: '评论滚动次数',
+        hint: '单条划线最多滚动几次以加载全部评论',
+        step: 1,
+        unit: '次',
+    },
+];
+
+const TIMING_FIELDS_ADVANCED = [
+    {
+        key: 'nativeCopyReadDelayMs',
+        label: '剪贴板读取超时',
+        hint: '复制划线原文时，等待剪贴板内容写入的最长时间',
+        step: 50,
+        unit: '毫秒',
+    },
     { key: 'reviewPanelTimeoutMs', label: '评论弹窗加载超时', step: 100, unit: '毫秒' },
     { key: 'reviewPanelPollIntervalMs', label: '评论弹窗检测间隔', step: 10, unit: '毫秒' },
-    { key: 'reviewScrollDistance', label: '评论每次滚动距离', step: 50, unit: '像素' },
-    { key: 'reviewScrollMaxAttempts', label: '评论滚动加载最大次数', step: 1, unit: '次' },
-    { key: 'reviewScrollDelayMs', label: '评论滚动后等待时间', step: 50, unit: '毫秒' },
     { key: 'captureRequestTimeoutMs', label: '页面抓取超时时间', step: 100, unit: '毫秒' },
     { key: 'uiFeedbackSuccessDelayMs', label: '复制成功提示持续', step: 100, unit: '毫秒' },
     { key: 'uiFeedbackInfoDelayMs', label: '操作提示持续时间', step: 100, unit: '毫秒' },
 ];
 
-function normalizeRate(value, fallback) {
-    const rate = Number(value);
-    if (!Number.isFinite(rate)) return fallback;
-    return Math.min(10, Math.max(0.1, Math.round(rate * 10) / 10));
-}
-
-function normalizeConfig(value = {}) {
-    const result = { ...DEFAULT_DOMAIN_CONFIG, ...value };
-    for (const field of DELAY_FIELDS) {
-        result[field.key] = normalizeDelay(value[field.key], DEFAULT_DOMAIN_CONFIG[field.key]);
-    }
-    result.readAloudRate = normalizeRate(value.readAloudRate, DEFAULT_DOMAIN_CONFIG.readAloudRate);
-    return result;
-}
-
-function normalizeDelay(value, fallback) {
-    const delay = Number(value);
-    if (!Number.isFinite(delay)) return fallback;
-
-    return Math.max(0, Math.round(delay));
-}
+const showReviewFormatOptions = computed(() => (
+    config.embedReviewsInFullCapture || config.embedReviewsInReadAloud
+));
 
 onMounted(async () => {
     Object.assign(config, normalizeConfig(await appState.domainConfigStorage.getValue()));
@@ -53,11 +74,9 @@ onMounted(async () => {
 });
 
 async function saveConfig() {
-    for (const field of DELAY_FIELDS) {
-        config[field.key] = normalizeDelay(config[field.key], DEFAULT_DOMAIN_CONFIG[field.key]);
-    }
-    config.readAloudRate = normalizeRate(config.readAloudRate, DEFAULT_DOMAIN_CONFIG.readAloudRate);
-    await appState.domainConfigStorage.setValue({ ...config });
+    const normalized = normalizeConfig({ ...config });
+    Object.assign(config, normalized);
+    await appState.domainConfigStorage.setValue(normalized);
 
     saveTip.value = '已保存';
     clearTimeout(saveTipTimer);
@@ -108,87 +127,114 @@ async function clearHistory() {
         <header class="popup-header">
             <div>
                 <h1>微信读书复制助手</h1>
-                <p>选择要在阅读页显示的功能按钮</p>
+                <p>配置阅读页功能按钮与行为</p>
             </div>
             <span v-if="saveTip" class="save-tip">{{ saveTip }}</span>
         </header>
 
-        <div v-if="isReady" class="config-card">
-            <label class="config-item">
-                <input type="checkbox" v-model="config.showCopyCurrentPageButton" @change="saveConfig" />
-                <span>启用复制本页文字</span>
-            </label>
-
-            <label class="config-item">
-                <input type="checkbox" v-model="config.showFullCaptureButton" @change="saveConfig" />
-                <span>启用全文爬取</span>
-            </label>
-
-            <label class="config-item config-sub-item">
-                <input
-                    type="checkbox"
-                    v-model="config.embedReviewsInFullCapture"
-                    :disabled="!config.showFullCaptureButton"
-                    @change="saveConfig"
-                />
-                <span>全文爬取 &gt; 是否嵌入评论</span>
-            </label>
-
-            <label class="config-item">
-                <input type="checkbox" v-model="config.showChapterCopyButton" @change="saveConfig" />
-                <span>启用复制章节目录</span>
-            </label>
-
-            <label class="config-item">
-                <input type="checkbox" v-model="config.showCopyCommentsButton" @change="saveConfig" />
-                <span>启用评论复制</span>
-            </label>
-
-            <label class="config-item">
-                <input type="checkbox" v-model="config.showReadAloudButton" @change="saveConfig" />
-                <span>启用朗读本页</span>
-            </label>
-
-            <label class="config-item config-sub-item">
-                <input
-                    type="checkbox"
-                    v-model="config.embedReviewsInReadAloud"
-                    :disabled="!config.showReadAloudButton"
-                    @change="saveConfig"
-                />
-                <span>朗读本页 &gt; 是否读评论</span>
-            </label>
-
-            <div class="delay-field read-aloud-rate">
-                <label for="readAloudRate">朗读倍速</label>
-                <div class="delay-input">
-                    <input
-                        id="readAloudRate"
-                        type="number"
-                        min="0.1"
-                        max="10"
-                        step="0.1"
-                        v-model.number="config.readAloudRate"
-                        :disabled="!config.showReadAloudButton"
-                        @change="saveConfig"
-                    />
-                    <span>倍</span>
-                </div>
-            </div>
-
-            <div class="delay-config">
-                <div class="delay-config-header">
-                    <label for="delay-toggle" class="delay-toggle-label">
-                        <span>延迟时间配置</span>
+        <div v-if="isReady" class="popup-body">
+            <!-- 基础功能 -->
+            <section class="section">
+                <h2 class="section-title">基础功能</h2>
+                <div class="option-group">
+                    <label class="option-row">
+                        <input type="checkbox" v-model="config.showCopyCurrentPageButton" @change="saveConfig" />
+                        <span class="option-label">复制本页文字</span>
                     </label>
-                    <button id="delay-toggle" class="delay-toggle-btn" @click="showDelaySettings = !showDelaySettings">
-                        {{ showDelaySettings ? '收起' : '展开' }}
-                    </button>
+                    <label class="option-row">
+                        <input type="checkbox" v-model="config.showChapterCopyButton" @change="saveConfig" />
+                        <span class="option-label">复制章节目录</span>
+                    </label>
+                    <label class="option-row">
+                        <input type="checkbox" v-model="config.showCopyCommentsButton" @change="saveConfig" />
+                        <span class="option-label">评论复制</span>
+                    </label>
                 </div>
-                <div v-show="showDelaySettings" class="delay-fields">
-                    <div v-for="field in DELAY_FIELDS" :key="field.key" class="delay-field">
-                        <label :for="field.key">{{ field.label }}</label>
-                        <div class="delay-input">
+            </section>
+
+            <!-- 全文爬取 -->
+            <section class="section">
+                <h2 class="section-title">全文爬取</h2>
+                <div class="option-group">
+                    <label class="option-row">
+                        <input type="checkbox" v-model="config.showFullCaptureButton" @change="saveConfig" />
+                        <span class="option-label">启用全文爬取</span>
+                    </label>
+                    <div class="option-children" :class="{ 'is-disabled': !config.showFullCaptureButton }">
+                        <label class="option-row sub">
+                            <input
+                                type="checkbox"
+                                v-model="config.embedReviewsInFullCapture"
+                                :disabled="!config.showFullCaptureButton"
+                                @change="saveConfig"
+                            />
+                            <span class="option-label">嵌入评论</span>
+                        </label>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 朗读本页 -->
+            <section class="section">
+                <h2 class="section-title">朗读本页</h2>
+                <div class="option-group">
+                    <label class="option-row">
+                        <input type="checkbox" v-model="config.showReadAloudButton" @change="saveConfig" />
+                        <span class="option-label">启用朗读本页</span>
+                    </label>
+                    <div class="option-children" :class="{ 'is-disabled': !config.showReadAloudButton }">
+                        <label class="option-row sub">
+                            <input
+                                type="checkbox"
+                                v-model="config.embedReviewsInReadAloud"
+                                :disabled="!config.showReadAloudButton"
+                                @change="saveConfig"
+                            />
+                            <span class="option-label">朗读评论</span>
+                        </label>
+                        <div class="option-row sub field-row">
+                            <span class="option-label">朗读倍速</span>
+                            <div class="number-input">
+                                <input
+                                    id="readAloudRate"
+                                    type="number"
+                                    min="0.25"
+                                    max="3"
+                                    step="0.05"
+                                    v-model.number="config.readAloudRate"
+                                    :disabled="!config.showReadAloudButton"
+                                    @change="saveConfig"
+                                />
+                                <span class="unit">倍</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 评论格式（两个嵌入功能共用） -->
+            <section v-if="showReviewFormatOptions" class="section">
+                <h2 class="section-title">评论格式</h2>
+                <div class="option-group hint-group">
+                    <p class="section-hint">作用于全文爬取嵌入与朗读评论</p>
+                    <label class="option-row">
+                        <input type="checkbox" v-model="config.includeReviewUsername" @change="saveConfig" />
+                        <span class="option-label">包含用户名</span>
+                    </label>
+                </div>
+            </section>
+
+            <!-- 运行节奏：常用、影响快慢 -->
+            <section class="section">
+                <h2 class="section-title">运行节奏</h2>
+                <p class="section-hint standalone-hint">控制爬取与读评论的速度，间隔越大越慢，但更不易触发限制</p>
+                <div class="option-group timing-group">
+                    <div v-for="field in TIMING_FIELDS_COMMON" :key="field.key" class="timing-row">
+                        <div class="timing-label-wrap">
+                            <span class="option-label">{{ field.label }}</span>
+                            <span v-if="field.hint" class="field-hint">{{ field.hint }}</span>
+                        </div>
+                        <div class="number-input">
                             <input
                                 :id="field.key"
                                 type="number"
@@ -197,20 +243,53 @@ async function clearHistory() {
                                 v-model.number="config[field.key]"
                                 @change="saveConfig"
                             />
-                            <span>{{ field.unit }}</span>
+                            <span class="unit">{{ field.unit }}</span>
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <section class="history-card">
-                <div class="history-header">
+            <!-- 高级：技术参数与 UI 提示 -->
+            <section class="section">
+                <div class="section-header-row">
                     <div>
-                        <strong>历史爬取记录</strong>
-                        <p>保存最近全文爬取结果，可直接下载 txt</p>
+                        <h2 class="section-title">高级设置</h2>
+                        <p class="section-hint">超时、轮询、按钮提示等底层参数，一般无需修改</p>
+                    </div>
+                    <button class="text-btn" @click="showAdvancedSettings = !showAdvancedSettings">
+                        {{ showAdvancedSettings ? '收起' : '展开' }}
+                    </button>
+                </div>
+                <div v-show="showAdvancedSettings" class="option-group timing-group">
+                    <div v-for="field in TIMING_FIELDS_ADVANCED" :key="field.key" class="timing-row">
+                        <div class="timing-label-wrap">
+                            <span class="option-label">{{ field.label }}</span>
+                            <span v-if="field.hint" class="field-hint">{{ field.hint }}</span>
+                        </div>
+                        <div class="number-input">
+                            <input
+                                :id="field.key"
+                                type="number"
+                                min="0"
+                                :step="field.step"
+                                v-model.number="config[field.key]"
+                                @change="saveConfig"
+                            />
+                            <span class="unit">{{ field.unit }}</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 历史记录 -->
+            <section class="section">
+                <div class="section-header-row">
+                    <div>
+                        <h2 class="section-title">历史爬取</h2>
+                        <p class="section-hint">最近全文爬取结果，可下载 txt</p>
                     </div>
                     <button
-                        class="history-clear-btn"
+                        class="text-btn"
                         :disabled="captureHistory.length === 0"
                         @click="clearHistory"
                     >
@@ -218,8 +297,8 @@ async function clearHistory() {
                     </button>
                 </div>
 
-                <div v-if="captureHistory.length === 0" class="history-empty">
-                    暂无历史记录，请先在阅读页执行全文爬取。
+                <div v-if="captureHistory.length === 0" class="empty-state">
+                    暂无记录，请先在阅读页执行全文爬取
                 </div>
 
                 <div v-else class="history-list">
@@ -235,8 +314,8 @@ async function clearHistory() {
                         <p class="history-preview">{{ getPreviewText(record.text) || '无内容预览' }}</p>
 
                         <div class="history-actions">
-                            <button class="history-action-btn" @click="downloadHistoryRecord(record)">下载 TXT</button>
-                            <button class="history-action-btn secondary" @click="copyHistoryRecord(record)">复制内容</button>
+                            <button class="btn primary" @click="downloadHistoryRecord(record)">下载 TXT</button>
+                            <button class="btn" @click="copyHistoryRecord(record)">复制内容</button>
                         </div>
                     </details>
                 </div>
@@ -249,24 +328,27 @@ async function clearHistory() {
 
 <style scoped>
 .popup-panel {
-    width: 320px;
+    width: 340px;
     box-sizing: border-box;
     padding: 16px;
     color: #1f2937;
-    background: #ffffff;
+    background: #f9fafb;
 }
 
 .popup-header {
     display: flex;
     justify-content: space-between;
+    align-items: flex-start;
     gap: 12px;
-    margin-bottom: 14px;
+    margin-bottom: 16px;
 }
 
 .popup-header h1 {
     margin: 0;
-    font-size: 18px;
+    font-size: 17px;
+    font-weight: 600;
     line-height: 1.3;
+    color: #111827;
 }
 
 .popup-header p {
@@ -276,184 +358,245 @@ async function clearHistory() {
 }
 
 .save-tip {
-    flex: 0 0 auto;
-    align-self: flex-start;
-    padding: 2px 8px;
+    flex-shrink: 0;
+    padding: 3px 10px;
     color: #15803d;
     background: #dcfce7;
     border-radius: 999px;
-    font-size: 12px;
-}
-
-.config-card {
-    display: grid;
-    gap: 10px;
-}
-
-.config-item {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    font-size: 14px;
-    cursor: pointer;
-    user-select: none;
-}
-
-.config-item input {
-    width: 16px;
-    height: 16px;
-}
-
-.config-sub-item {
-    margin-left: 18px;
-    background: #ffffff;
-}
-
-.config-sub-item:has(input:disabled) {
-    color: #9ca3af;
-    cursor: not-allowed;
-}
-
-.delay-config {
-    padding: 12px;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-    text-align: left;
-}
-
-.delay-config-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-
-.delay-toggle-label span {
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 500;
 }
 
-.delay-toggle-btn {
-    padding: 2px 10px;
-    font-size: 12px;
-    color: #6b7280;
-    background: #e5e7eb;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-}
-
-.delay-toggle-btn:hover {
-    background: #d1d5db;
-}
-
-.delay-fields {
-    display: grid;
-    gap: 8px;
-    margin-top: 10px;
-}
-
-.delay-field {
+.popup-body {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    gap: 14px;
 }
 
-.delay-field label {
-    font-size: 13px;
-    color: #374151;
-    flex-shrink: 0;
+.section-title {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #9ca3af;
 }
 
-.delay-input {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.delay-input input {
-    width: 120px;
-    box-sizing: border-box;
-    padding: 6px 8px;
-    color: #111827;
-    background: #ffffff;
-    border: 1px solid #d1d5db;
-    border-radius: 6px;
-}
-
-.delay-input span,
-.loading {
-    color: #6b7280;
-    font-size: 12px;
-}
-
-.read-aloud-rate {
-    padding: 10px 12px;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-}
-
-.history-card {
-    padding: 12px;
-    background: #f8fafc;
-    border: 1px solid #e5e7eb;
-    border-radius: 8px;
-}
-
-.history-header {
+.section-header-row {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
     gap: 8px;
-    margin-bottom: 10px;
+    margin-bottom: 8px;
 }
 
-.history-header p {
-    margin: 4px 0 0;
-    color: #6b7280;
-    font-size: 12px;
+.section-header-row .section-title {
+    margin-bottom: 0;
 }
 
-.history-clear-btn,
-.history-action-btn {
-    border: none;
-    border-radius: 6px;
+.section-hint {
+    margin: 0 0 8px;
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.4;
+}
+
+.standalone-hint {
+    margin: 4px 0 6px;
+}
+
+.hint-group .section-hint {
+    padding: 0 12px;
+    margin-bottom: 4px;
+}
+
+.timing-group {
+    margin-top: 0;
+}
+
+.timing-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.timing-row:last-child {
+    border-bottom: none;
+}
+
+.timing-label-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.field-hint {
+    font-size: 11px;
+    color: #9ca3af;
+    line-height: 1.35;
+}
+
+.option-group {
+    margin-top: 6px;
+    background: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+.option-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.option-group > .option-row:last-child,
+.option-children > .option-row:last-child {
+    border-bottom: none;
+}
+
+.option-row input[type='checkbox'] {
+    width: 15px;
+    height: 15px;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: #2563eb;
     cursor: pointer;
 }
 
-.history-clear-btn {
-    padding: 6px 10px;
+.option-label {
+    flex: 1;
     color: #374151;
-    background: #e5e7eb;
-    font-size: 12px;
+    line-height: 1.4;
 }
 
-.history-clear-btn:disabled {
-    opacity: 0.5;
+.option-children {
+    border-top: 1px solid #f3f4f6;
+    background: #fafbfc;
+}
+
+.option-children.is-disabled .option-label {
+    color: #9ca3af;
+}
+
+.option-row.sub {
+    padding-left: 28px;
+    position: relative;
+}
+
+.option-row.sub::before {
+    content: '';
+    position: absolute;
+    left: 16px;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e5e7eb;
+    border-radius: 1px;
+}
+
+.option-row:has(input:disabled) {
     cursor: not-allowed;
 }
 
-.history-empty {
-    color: #6b7280;
+.field-row {
+    cursor: default;
+    justify-content: space-between;
+}
+
+.number-input {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.number-input input {
+    width: 72px;
+    box-sizing: border-box;
+    padding: 4px 8px;
     font-size: 12px;
+    color: #111827;
+    background: #ffffff;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    text-align: right;
+}
+
+.number-input input:disabled {
+    background: #f3f4f6;
+    color: #9ca3af;
+}
+
+.unit {
+    font-size: 11px;
+    color: #9ca3af;
+    min-width: 24px;
+}
+
+.text-btn {
+    padding: 2px 8px;
+    font-size: 11px;
+    color: #2563eb;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.text-btn:hover:not(:disabled) {
+    background: #eff6ff;
+}
+
+.text-btn:disabled {
+    color: #9ca3af;
+    cursor: not-allowed;
+}
+
+.delay-group {
+    margin-top: 0;
+}
+
+.delay-label {
+    font-size: 12px;
+    color: #6b7280;
+    padding-right: 8px;
+}
+
+.empty-state {
+    margin-top: 6px;
+    padding: 16px 12px;
+    font-size: 12px;
+    color: #9ca3af;
+    text-align: center;
+    background: #ffffff;
+    border: 1px dashed #e5e7eb;
+    border-radius: 10px;
 }
 
 .history-list {
-    display: grid;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
+    margin-top: 6px;
 }
 
 .history-item {
-    padding: 10px;
-    background: #fff;
+    padding: 10px 12px;
+    background: #ffffff;
     border: 1px solid #e5e7eb;
-    border-radius: 8px;
+    border-radius: 10px;
 }
 
 .history-summary {
@@ -469,23 +612,30 @@ async function clearHistory() {
 }
 
 .history-main {
-    display: grid;
-    gap: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
 }
 
 .history-main strong {
     font-size: 13px;
+    color: #111827;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .history-main span,
-.history-summary time,
-.history-preview {
-    color: #6b7280;
-    font-size: 12px;
+.history-summary time {
+    font-size: 11px;
+    color: #9ca3af;
 }
 
 .history-preview {
     margin: 10px 0 0;
+    font-size: 12px;
+    color: #6b7280;
     line-height: 1.5;
     white-space: pre-wrap;
     word-break: break-word;
@@ -497,15 +647,33 @@ async function clearHistory() {
     margin-top: 10px;
 }
 
-.history-action-btn {
-    padding: 6px 10px;
-    color: #fff;
-    background: #2563eb;
-    font-size: 12px;
+.btn {
+    padding: 5px 10px;
+    font-size: 11px;
+    color: #374151;
+    background: #f3f4f6;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
 }
 
-.history-action-btn.secondary {
-    color: #374151;
+.btn:hover {
     background: #e5e7eb;
+}
+
+.btn.primary {
+    color: #ffffff;
+    background: #2563eb;
+}
+
+.btn.primary:hover {
+    background: #1d4ed8;
+}
+
+.loading {
+    padding: 24px;
+    text-align: center;
+    color: #9ca3af;
+    font-size: 13px;
 }
 </style>

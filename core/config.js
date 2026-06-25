@@ -15,11 +15,11 @@ export const DEFAULT_DOMAIN_CONFIG = {
     showCopyCommentsButton: true, //是否显示评论复制按钮
     showReadAloudButton: true, //是否显示朗读本页按钮
     embedReviewsInReadAloud: false, //朗读本页时是否嵌入评论(口语格式)
+    includeReviewUsername: true, //嵌入/朗读评论时是否包含用户名
     readAloudRate: 1.0, //朗读倍速
     fullCapturePageDelayMs: 2000, //翻页后等待时间
-    reviewDelayMinMs: 800, //点击划线后等待(最短)
-    reviewDelayMaxMs: 1200, //点击划线后等待(最长)
-    nativeCopyReadDelayMs: 100, //复制后读取等待
+    reviewDelayMs: 1000, //点击划线读取评论后的等待
+    nativeCopyReadDelayMs: 100, //复制划线原文后等待剪贴板写入
     reviewPanelTimeoutMs: 1500, //评论弹窗加载超时
     reviewPanelPollIntervalMs: 80, //评论弹窗检测间隔
     reviewScrollDistance: 200, //评论列表每次滚动距离(px)
@@ -49,10 +49,10 @@ export const appState = {
         showCopyCommentsButton: false, //是否显示评论复制按钮
         showReadAloudButton: false,
         embedReviewsInReadAloud: DEFAULT_DOMAIN_CONFIG.embedReviewsInReadAloud,
+        includeReviewUsername: DEFAULT_DOMAIN_CONFIG.includeReviewUsername,
         readAloudRate: DEFAULT_DOMAIN_CONFIG.readAloudRate,
         fullCapturePageDelayMs: DEFAULT_DOMAIN_CONFIG.fullCapturePageDelayMs,
-        reviewDelayMinMs: DEFAULT_DOMAIN_CONFIG.reviewDelayMinMs,
-        reviewDelayMaxMs: DEFAULT_DOMAIN_CONFIG.reviewDelayMaxMs,
+        reviewDelayMs: DEFAULT_DOMAIN_CONFIG.reviewDelayMs,
         nativeCopyReadDelayMs: DEFAULT_DOMAIN_CONFIG.nativeCopyReadDelayMs,
         reviewPanelTimeoutMs: DEFAULT_DOMAIN_CONFIG.reviewPanelTimeoutMs,
         reviewPanelPollIntervalMs: DEFAULT_DOMAIN_CONFIG.reviewPanelPollIntervalMs,

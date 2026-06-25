@@ -1,7 +1,7 @@
 import { appState, MAX_CAPTURE_HISTORY } from '../core/config.js';
 import { beginFullCaptureDiag, buildTextData, flushFullCaptureDiag } from './capture.js';
 import { normalizeConfig } from './normalizeConfig.js';
-import { collectCurrentPageReviewEntries, embedReviewsInText } from './reviews.js';
+import { collectCurrentPageReviewEntries, embedReviewsInText, formatEmbeddedReviews } from './reviews.js';
 import {
     bindHoverBackground,
     bindPressScale,
@@ -112,7 +112,14 @@ export function installFullCaptureButtons({ config, getNextFloatingTop, requestC
                     config,
                 );
 
-                text = embedReviewsInText(text, reviewEntries, reviewDedupState, pageIndex, fullCapturePages);
+                text = embedReviewsInText(
+                    text,
+                    reviewEntries,
+                    reviewDedupState,
+                    pageIndex,
+                    fullCapturePages,
+                    (reviews) => formatEmbeddedReviews(reviews, config.includeReviewUsername),
+                );
                 fullCaptureReviewCount = Array.from(reviewDedupState.values())
                     .reduce((total, entry) => total + entry.reviews.length, 0);
                 await requestCapture('clear');

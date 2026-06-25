@@ -292,20 +292,24 @@ function getReviewInsertInfo(trigger, pageItems, itemEndOffsets, pageText) {
     };
 }
 
-export function formatSpokenReviews(reviews) {
+export function formatSpokenReviews(reviews, includeUsername = true) {
     const parts = reviews.map((review) => {
+        const content = review.content || '';
+        if (!includeUsername) return content;
         const username = review.username || '匿名';
-        return `${username}说，${review.content || ''}`;
+        return `${username}说，${content}`;
     });
     return `评论，${parts.join('；')}`;
 }
 
-function formatEmbeddedReviews(reviews) {
+export function formatEmbeddedReviews(reviews, includeUsername = true) {
     const content = reviews
         .map((review, index) => {
             const prefix = reviews.length > 1 ? `${index + 1}. ` : '';
+            const reviewContent = review.content || '';
+            if (!includeUsername) return `${prefix}${reviewContent}`;
             const username = review.username || '匿名';
-            return `${prefix}${username}：${review.content || ''}`;
+            return `${prefix}${username}：${reviewContent}`;
         })
         .join('；');
 
@@ -415,10 +419,8 @@ export function embedReviewsInText(text, reviewEntries, reviewDedupState, pageIn
     return result;
 }
 
-function getRandomReviewDelay(config) {
-    const min = config.reviewDelayMinMs;
-    const max = config.reviewDelayMaxMs;
-    return min + Math.floor(Math.random() * (max - min + 1));
+function getReviewDelay(config) {
+    return config.reviewDelayMs;
 }
 
 export async function collectCurrentPageReviewEntries(pageItems, itemEndOffsets, pageNumber, pageText, onProgress, config) {
@@ -448,7 +450,7 @@ export async function collectCurrentPageReviewEntries(pageItems, itemEndOffsets,
         const existingPanel = getActiveReviewPanel();
         if (existingPanel) {
             await closeReviewPanel(existingPanel, config);
-            await sleep(getRandomReviewDelay(config));
+            await sleep(getReviewDelay(config));
         }
 
         clickReviewTrigger(clickTarget);
@@ -464,7 +466,7 @@ export async function collectCurrentPageReviewEntries(pageItems, itemEndOffsets,
             continue;
         }
 
-        await sleep(getRandomReviewDelay(config));
+        await sleep(getReviewDelay(config));
 
         await loadAllReviewItems(panel, config);
         const reviews = collectReviewItems(panel);
@@ -500,7 +502,7 @@ export async function collectCurrentPageReviewEntries(pageItems, itemEndOffsets,
             console.warn('[weread] 评论弹窗关闭失败', index + 1);
         }
 
-        await sleep(getRandomReviewDelay(config));
+        await sleep(getReviewDelay(config));
     }
 
     return entries;

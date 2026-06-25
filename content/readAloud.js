@@ -180,7 +180,14 @@ export function installReadAloudButton({ config, getNextFloatingTop, requestCapt
             onProgress,
             config,
         );
-        text = embedReviewsInText(text, reviewEntries, new Map(), 0, [], formatSpokenReviews);
+        text = embedReviewsInText(
+            text,
+            reviewEntries,
+            new Map(),
+            0,
+            [],
+            (reviews) => formatSpokenReviews(reviews, config.includeReviewUsername),
+        );
         logReadAloud('准备完成(含评论)', {
             textLength: text.length,
             reviewEntryCount: reviewEntries.length,
@@ -219,8 +226,8 @@ export function installReadAloudButton({ config, getNextFloatingTop, requestCapt
     const speedRow = createPanelRow('倍速');
     const speedInput = document.createElement('input');
     speedInput.type = 'range';
-    speedInput.min = '0.5';
-    speedInput.max = '2';
+    speedInput.min = '0.25';
+    speedInput.max = '3';
     speedInput.step = '0.1';
     speedInput.value = String(config.readAloudRate);
     Object.assign(speedInput.style, { width: '100%' });
