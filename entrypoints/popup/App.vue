@@ -6,6 +6,7 @@ const config = reactive({ ...DEFAULT_DOMAIN_CONFIG });
 const isReady = ref(false);
 const saveTip = ref('');
 const showDelaySettings = ref(false);
+const captureHistory = ref([]);
 let saveTipTimer = null;
 
 const DELAY_FIELDS = [
@@ -17,6 +18,7 @@ const DELAY_FIELDS = [
     { key: 'reviewPanelPollIntervalMs', label: '评论弹窗检测间隔', step: 10, unit: '毫秒' },
     { key: 'reviewScrollDistance', label: '评论每次滚动距离', step: 50, unit: '像素' },
     { key: 'reviewScrollMaxAttempts', label: '评论滚动加载最大次数', step: 1, unit: '次' },
+    { key: 'reviewScrollDelayMs', label: '评论滚动后等待时间', step: 50, unit: '毫秒' },
     { key: 'captureRequestTimeoutMs', label: '页面抓取超时时间', step: 100, unit: '毫秒' },
     { key: 'uiFeedbackSuccessDelayMs', label: '复制成功提示持续', step: 100, unit: '毫秒' },
     { key: 'uiFeedbackInfoDelayMs', label: '操作提示持续时间', step: 100, unit: '毫秒' },
@@ -39,6 +41,7 @@ function normalizeDelay(value, fallback) {
 
 onMounted(async () => {
     Object.assign(config, normalizeConfig(await appState.domainConfigStorage.getValue()));
+    captureHistory.value = await appState.captureHistoryStorage.getValue();
     isReady.value = true;
 });
 
@@ -53,6 +56,42 @@ async function saveConfig() {
     saveTipTimer = setTimeout(() => {
         saveTip.value = '';
     }, 1200);
+}
+
+function formatDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '未知时间';
+    return date.toLocaleString('zh-CN', { hour12: false });
+}
+
+function getHistorySummary(record) {
+    if (record.embedReviews) {
+        return `${record.pageCount || 0} 页 / ${record.reviewCount || 0} 条评论`;
+    }
+    return `${record.pageCount || 0} 页`;
+}
+
+function getPreviewText(text) {
+    return String(text ?? '').slice(0, 120).trim();
+}
+
+function downloadHistoryRecord(record) {
+    const blob = new Blob([record.text || ''], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = record.fileName || `${record.title || 'weread'}.txt`;
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function copyHistoryRecord(record) {
+    await navigator.clipboard.writeText(record.text || '');
+}
+
+async function clearHistory() {
+    await appState.captureHistoryStorage.setValue([]);
+    captureHistory.value = [];
 }
 </script>
 
@@ -123,6 +162,45 @@ async function saveConfig() {
                     </div>
                 </div>
             </div>
+
+            <section class="history-card">
+                <div class="history-header">
+                    <div>
+                        <strong>历史爬取记录</strong>
+                        <p>保存最近全文爬取结果，可直接下载 txt</p>
+                    </div>
+                    <button
+                        class="history-clear-btn"
+                        :disabled="captureHistory.length === 0"
+                        @click="clearHistory"
+                    >
+                        清空
+                    </button>
+                </div>
+
+                <div v-if="captureHistory.length === 0" class="history-empty">
+                    暂无历史记录，请先在阅读页执行全文爬取。
+                </div>
+
+                <div v-else class="history-list">
+                    <details v-for="record in captureHistory" :key="record.id" class="history-item">
+                        <summary class="history-summary">
+                            <div class="history-main">
+                                <strong>{{ record.title || '未命名书籍' }}</strong>
+                                <span>{{ getHistorySummary(record) }}</span>
+                            </div>
+                            <time>{{ formatDateTime(record.createdAt) }}</time>
+                        </summary>
+
+                        <p class="history-preview">{{ getPreviewText(record.text) || '无内容预览' }}</p>
+
+                        <div class="history-actions">
+                            <button class="history-action-btn" @click="downloadHistoryRecord(record)">下载 TXT</button>
+                            <button class="history-action-btn secondary" @click="copyHistoryRecord(record)">复制内容</button>
+                        </div>
+                    </details>
+                </div>
+            </section>
         </div>
 
         <div v-else class="loading">加载配置中...</div>
@@ -272,5 +350,115 @@ async function saveConfig() {
 .loading {
     color: #6b7280;
     font-size: 12px;
+}
+
+.history-card {
+    padding: 12px;
+    background: #f8fafc;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.history-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.history-header p {
+    margin: 4px 0 0;
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.history-clear-btn,
+.history-action-btn {
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.history-clear-btn {
+    padding: 6px 10px;
+    color: #374151;
+    background: #e5e7eb;
+    font-size: 12px;
+}
+
+.history-clear-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.history-empty {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.history-list {
+    display: grid;
+    gap: 8px;
+}
+
+.history-item {
+    padding: 10px;
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+}
+
+.history-summary {
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    cursor: pointer;
+    list-style: none;
+}
+
+.history-summary::-webkit-details-marker {
+    display: none;
+}
+
+.history-main {
+    display: grid;
+    gap: 4px;
+}
+
+.history-main strong {
+    font-size: 13px;
+}
+
+.history-main span,
+.history-summary time,
+.history-preview {
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.history-preview {
+    margin: 10px 0 0;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.history-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.history-action-btn {
+    padding: 6px 10px;
+    color: #fff;
+    background: #2563eb;
+    font-size: 12px;
+}
+
+.history-action-btn.secondary {
+    color: #374151;
+    background: #e5e7eb;
 }
 </style>

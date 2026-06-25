@@ -57,23 +57,6 @@ export default defineContentScript({
             state.order.push(item);
         }
 
-        function buildText(items) {
-            if (items.length === 0) return '';
-
-            let text = '';
-            let lastY = items[0].y;
-
-            for (const item of items) {
-                if (item.y !== lastY) {
-                    text += '\n';
-                    lastY = item.y;
-                }
-                text += item.text;
-            }
-
-            return text;
-        }
-
         function snapshot() {
             return state.order.map((item) => ({ ...item }));
         }
@@ -83,11 +66,7 @@ export default defineContentScript({
             state.order.length = 0;
         }
 
-        function printAndClear() {
-            const items = snapshot();
-            if (items.length > 0) {
-                console.log(buildText(items));
-            }
+        function clearBeforePageChange() {
             clearCapture();
         }
 
@@ -123,16 +102,16 @@ export default defineContentScript({
 
         document.addEventListener('pointerdown', (event) => {
             if (event.target?.closest?.('.renderTarget_pager_button, .renderTarget_pager_button_right')) {
-                printAndClear();
+                clearBeforePageChange();
             }
         }, true);
 
         document.addEventListener('keydown', (event) => {
             if (['ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown'].includes(event.key)) {
-                printAndClear();
+                clearBeforePageChange();
             }
         }, true);
 
-        console.log('[weread] canvas 捕获器已启动，翻页时会输出上一页文字');
+        console.log('[weread] canvas 捕获器已启动');
     },
 });

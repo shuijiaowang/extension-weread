@@ -21,14 +21,21 @@ export const DEFAULT_DOMAIN_CONFIG = {
     reviewPanelPollIntervalMs: 80, //评论弹窗检测间隔
     reviewScrollDistance: 200, //评论列表每次滚动距离(px)
     reviewScrollMaxAttempts: 15, //评论列表滚动加载最大次数
+    reviewScrollDelayMs: 200, //评论滚动后等待时间
     captureRequestTimeoutMs: 1000, //页面抓取超时时间
     uiFeedbackSuccessDelayMs: 1500, //复制成功提示持续
     uiFeedbackInfoDelayMs: 1200, //操作提示持续时间
 };
+
+export const MAX_CAPTURE_HISTORY = 20;
+
 export const appState = {
     //--------该网站独有的存储属性-------
     domainConfigStorage : storage.defineItem(`local:wereadDomainConfig`, {
         fallback: DEFAULT_DOMAIN_CONFIG //不存在则返回默认值
+    }),
+    captureHistoryStorage: storage.defineItem(`local:wereadCaptureHistory`, {
+        fallback: [],
     }),
     domainConfig: {
         isPluginEnabled: false, //是否启用插件
@@ -45,6 +52,7 @@ export const appState = {
         reviewPanelPollIntervalMs: DEFAULT_DOMAIN_CONFIG.reviewPanelPollIntervalMs,
         reviewScrollDistance: DEFAULT_DOMAIN_CONFIG.reviewScrollDistance,
         reviewScrollMaxAttempts: DEFAULT_DOMAIN_CONFIG.reviewScrollMaxAttempts,
+        reviewScrollDelayMs: DEFAULT_DOMAIN_CONFIG.reviewScrollDelayMs,
         captureRequestTimeoutMs: DEFAULT_DOMAIN_CONFIG.captureRequestTimeoutMs,
         uiFeedbackSuccessDelayMs: DEFAULT_DOMAIN_CONFIG.uiFeedbackSuccessDelayMs,
         uiFeedbackInfoDelayMs: DEFAULT_DOMAIN_CONFIG.uiFeedbackInfoDelayMs,
