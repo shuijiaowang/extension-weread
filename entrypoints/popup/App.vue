@@ -1,13 +1,23 @@
 <script setup>
 import { reactive, ref, computed, onMounted } from 'vue';
 import { appState, DEFAULT_DOMAIN_CONFIG } from '../../core/config.js';
+import { formatCaptureRecordText, hasCaptureReviews, normalizeCaptureRecord } from '../../content/captureExport.js';
 import { normalizeConfig } from '../../content/normalizeConfig.js';
+import { copyText, downloadTextFile } from '../../content/shared.js';
 
 const config = reactive({ ...DEFAULT_DOMAIN_CONFIG });
 const isReady = ref(false);
 const saveTip = ref('');
 const showAdvancedSettings = ref(false);
 const captureHistory = ref([]);
+const exportDialog = reactive({
+    visible: false,
+    mode: 'download',
+    record: null,
+    includeReviews: false,
+    includeReviewUsername: true,
+    reviewMaxLength: 0,
+});
 let saveTipTimer = null;
 
 const TIMING_FIELDS_COMMON = [
@@ -69,20 +79,23 @@ const showReviewFormatOptions = computed(() => (
 
 onMounted(async () => {
     Object.assign(config, normalizeConfig(await appState.domainConfigStorage.getValue()));
-    captureHistory.value = await appState.captureHistoryStorage.getValue();
+    captureHistory.value = (await appState.captureHistoryStorage.getValue()).map(normalizeCaptureRecord);
     isReady.value = true;
 });
+
+function showTip(message) {
+    saveTip.value = message;
+    clearTimeout(saveTipTimer);
+    saveTipTimer = setTimeout(() => {
+        saveTip.value = '';
+    }, 1200);
+}
 
 async function saveConfig() {
     const normalized = normalizeConfig({ ...config });
     Object.assign(config, normalized);
     await appState.domainConfigStorage.setValue(normalized);
-
-    saveTip.value = '已保存';
-    clearTimeout(saveTipTimer);
-    saveTipTimer = setTimeout(() => {
-        saveTip.value = '';
-    }, 1200);
+    showTip('已保存');
 }
 
 function formatDateTime(value) {
@@ -92,28 +105,55 @@ function formatDateTime(value) {
 }
 
 function getHistorySummary(record) {
-    if (record.embedReviews) {
+    if (hasCaptureReviews(record)) {
         return `${record.pageCount || 0} 页 / ${record.reviewCount || 0} 条评论`;
     }
     return `${record.pageCount || 0} 页`;
 }
 
-function getPreviewText(text) {
-    return String(text ?? '').slice(0, 120).trim();
+function getPreviewText(record) {
+    return formatCaptureRecordText(record, { includeReviews: false }).slice(0, 120).trim();
 }
 
-function downloadHistoryRecord(record) {
-    const blob = new Blob([record.text || ''], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = record.fileName || `${record.title || 'weread'}.txt`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+function openHistoryExportDialog(record, mode) {
+    exportDialog.visible = true;
+    exportDialog.mode = mode;
+    exportDialog.record = normalizeCaptureRecord(record);
+    exportDialog.includeReviews = hasCaptureReviews(record);
+    exportDialog.includeReviewUsername = true;
+    exportDialog.reviewMaxLength = 0;
 }
 
-async function copyHistoryRecord(record) {
-    await navigator.clipboard.writeText(record.text || '');
+function closeHistoryExportDialog() {
+    exportDialog.visible = false;
+    exportDialog.mode = 'download';
+    exportDialog.record = null;
+    exportDialog.includeReviews = false;
+    exportDialog.includeReviewUsername = true;
+    exportDialog.reviewMaxLength = 0;
+}
+
+async function confirmHistoryExport() {
+    if (!exportDialog.record) return;
+
+    const text = formatCaptureRecordText(exportDialog.record, {
+        includeReviews: exportDialog.includeReviews,
+        includeReviewUsername: exportDialog.includeReviewUsername,
+        reviewMaxLength: exportDialog.reviewMaxLength,
+    });
+
+    if (exportDialog.mode === 'download') {
+        downloadTextFile(
+            exportDialog.record.fileName || `${exportDialog.record.title || 'weread'}.txt`,
+            text,
+        );
+        showTip('已下载');
+    } else {
+        await copyText(text);
+        showTip('已复制');
+    }
+
+    closeHistoryExportDialog();
 }
 
 async function clearHistory() {
@@ -311,11 +351,11 @@ async function clearHistory() {
                             <time>{{ formatDateTime(record.createdAt) }}</time>
                         </summary>
 
-                        <p class="history-preview">{{ getPreviewText(record.text) || '无内容预览' }}</p>
+                        <p class="history-preview">{{ getPreviewText(record) || '无内容预览' }}</p>
 
                         <div class="history-actions">
-                            <button class="btn primary" @click="downloadHistoryRecord(record)">下载 TXT</button>
-                            <button class="btn" @click="copyHistoryRecord(record)">复制内容</button>
+                            <button class="btn primary" @click="openHistoryExportDialog(record, 'download')">下载 TXT</button>
+                            <button class="btn" @click="openHistoryExportDialog(record, 'copy')">复制内容</button>
                         </div>
                     </details>
                 </div>
@@ -323,6 +363,56 @@ async function clearHistory() {
         </div>
 
         <div v-else class="loading">加载配置中...</div>
+
+        <div v-if="exportDialog.visible" class="modal-mask" @click.self="closeHistoryExportDialog">
+            <div class="modal-card">
+                <h3>导出选项</h3>
+                <p class="modal-hint">
+                    {{
+                        hasCaptureReviews(exportDialog.record || {})
+                            ? '评论数据已保存在本次爬取结果里，确认前可决定是否导出。'
+                            : '这条记录没有评论数据，将只导出正文。'
+                    }}
+                </p>
+
+                <div class="option-group modal-option-group">
+                    <label class="option-row" :class="{ disabled: !hasCaptureReviews(exportDialog.record || {}) }">
+                        <input
+                            type="checkbox"
+                            v-model="exportDialog.includeReviews"
+                            :disabled="!hasCaptureReviews(exportDialog.record || {})"
+                        />
+                        <span class="option-label">导出内嵌评论</span>
+                    </label>
+                    <label class="option-row" :class="{ disabled: !exportDialog.includeReviews }">
+                        <input
+                            type="checkbox"
+                            v-model="exportDialog.includeReviewUsername"
+                            :disabled="!exportDialog.includeReviews"
+                        />
+                        <span class="option-label">展示用户名</span>
+                    </label>
+                    <div class="option-row field-row" :class="{ disabled: !exportDialog.includeReviews }">
+                        <span class="option-label">评论最多字数</span>
+                        <div class="number-input">
+                            <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                v-model.number="exportDialog.reviewMaxLength"
+                                :disabled="!exportDialog.includeReviews"
+                            />
+                            <span class="unit">0=不限</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn" @click="closeHistoryExportDialog">取消</button>
+                    <button class="btn primary" @click="confirmHistoryExport">确认</button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>
 
@@ -647,6 +737,49 @@ async function clearHistory() {
     margin-top: 10px;
 }
 
+.modal-mask {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.modal-card {
+    width: 100%;
+    max-width: 320px;
+    padding: 16px;
+    background: #ffffff;
+    border-radius: 12px;
+    box-shadow: 0 24px 64px rgba(15, 23, 42, 0.24);
+}
+
+.modal-card h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #111827;
+}
+
+.modal-hint {
+    margin: 6px 0 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    color: #6b7280;
+}
+
+.modal-option-group {
+    margin-top: 0;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 14px;
+}
+
 .btn {
     padding: 5px 10px;
     font-size: 11px;
@@ -668,6 +801,10 @@ async function clearHistory() {
 
 .btn.primary:hover {
     background: #1d4ed8;
+}
+
+.disabled {
+    color: #9ca3af;
 }
 
 .loading {
