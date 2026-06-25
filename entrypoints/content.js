@@ -46,6 +46,7 @@ export default defineContentScript({
             document.getElementById('weread-full-capture')?.remove();
             document.getElementById('weread-copy-full-capture')?.remove();
             document.getElementById('weread-download-full-capture')?.remove();
+            document.getElementById('weread-stop-full-capture')?.remove();
             document.getElementById('weread-copy-chapters')?.remove();
             document.querySelectorAll('.weread-copy-comments-toolbar-item').forEach((button) => button.remove());
         }
@@ -1146,6 +1147,7 @@ export default defineContentScript({
         // ========== 全文爬取按钮 ==========
         if (config.showFullCaptureButton) {
         let isFullCaptureRunning = false;
+        let stopAfterCurrentPage = false;
         let fullCapturePages = [];
         let fullCaptureText = '';
         let fullCaptureReviewCount = 0;
@@ -1154,6 +1156,44 @@ export default defineContentScript({
         document.getElementById('weread-full-capture')?.remove();
         document.getElementById('weread-copy-full-capture')?.remove();
         document.getElementById('weread-download-full-capture')?.remove();
+        document.getElementById('weread-stop-full-capture')?.remove();
+
+        const stopFullCaptureBtn = document.createElement('div');
+        stopFullCaptureBtn.id = 'weread-stop-full-capture';
+        stopFullCaptureBtn.textContent = '直接结束';
+        Object.assign(stopFullCaptureBtn.style, {
+            position: 'fixed',
+            top: getNextFloatingTop(),
+            right: '12px',
+            zIndex: '2147483647',
+            padding: '8px 16px',
+            background: '#e53935',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            userSelect: 'none',
+            transition: 'background 0.2s, transform 0.1s',
+            display: 'none',
+        });
+
+        stopFullCaptureBtn.addEventListener('mouseenter', () => {
+            if (stopFullCaptureBtn.style.display !== 'none') stopFullCaptureBtn.style.background = '#c62828';
+        });
+        stopFullCaptureBtn.addEventListener('mouseleave', () => {
+            if (stopFullCaptureBtn.style.display !== 'none') stopFullCaptureBtn.style.background = '#e53935';
+        });
+        stopFullCaptureBtn.addEventListener('mousedown', () => stopFullCaptureBtn.style.transform = 'scale(0.95)');
+        stopFullCaptureBtn.addEventListener('mouseup', () => stopFullCaptureBtn.style.transform = 'scale(1)');
+        stopFullCaptureBtn.addEventListener('click', () => {
+            if (!isFullCaptureRunning) return;
+            stopAfterCurrentPage = true;
+            stopFullCaptureBtn.textContent = '本页结束后停止';
+            stopFullCaptureBtn.style.background = '#b71c1c';
+            stopFullCaptureBtn.style.cursor = 'default';
+        });
 
         const fullCaptureBtn = document.createElement('div');
         fullCaptureBtn.id = 'weread-full-capture';
@@ -1231,6 +1271,7 @@ export default defineContentScript({
             Object.assign(config, normalizeConfig(await appState.domainConfigStorage.getValue()));
 
             isFullCaptureRunning = true;
+            stopAfterCurrentPage = false;
             fullCapturePages = [];
             fullCaptureText = '';
             fullCaptureReviewCount = 0;
@@ -1239,6 +1280,10 @@ export default defineContentScript({
             if (config.embedReviewsInFullCapture) beginFullCaptureDiag();
             copyFullBtn.style.display = 'none';
             downloadFullBtn.style.display = 'none';
+            stopFullCaptureBtn.textContent = '直接结束';
+            stopFullCaptureBtn.style.background = '#e53935';
+            stopFullCaptureBtn.style.cursor = 'pointer';
+            stopFullCaptureBtn.style.display = 'block';
             fullCaptureBtn.style.background = '#6a1b9a';
 
             while (true) {
@@ -1272,6 +1317,8 @@ export default defineContentScript({
                     fullCapturePages.push(text);
                 }
 
+                if (stopAfterCurrentPage) break;
+
                 const nextBtn = document.querySelector('.renderTarget_pager_button_right');
                 if (!nextBtn || nextBtn.parentElement?.style.display === 'none') break;
 
@@ -1279,9 +1326,11 @@ export default defineContentScript({
                 const delay = getPageDelay();
                 fullCaptureBtn.textContent = `等待翻页 ${Math.round(delay / 100) / 10}s...`;
                 await sleep(delay);
+                if (stopAfterCurrentPage) break;
             }
 
             isFullCaptureRunning = false;
+            stopFullCaptureBtn.style.display = 'none';
             fullCaptureText = fullCapturePages.join('\n\n');
             await flushFullCaptureDiag();
 
@@ -1368,6 +1417,7 @@ export default defineContentScript({
         });
 
         document.body.appendChild(fullCaptureBtn);
+        document.body.appendChild(stopFullCaptureBtn);
         document.body.appendChild(copyFullBtn);
         document.body.appendChild(downloadFullBtn);
         }
